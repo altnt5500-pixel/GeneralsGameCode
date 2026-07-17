@@ -48,6 +48,7 @@
 #include "GameLogic/Object.h"
 #include "GameLogic/ObjectCreationList.h"
 #include "GameLogic/Weapon.h"
+#include "GameLogic/TerrainLogic.h"
 
 //-------------------------------------------------------------------------------------------------
 InstantDeathBehaviorModuleData::InstantDeathBehaviorModuleData()
@@ -57,6 +58,29 @@ InstantDeathBehaviorModuleData::InstantDeathBehaviorModuleData()
 	//m_ocls.clear();
 	//m_weapons.clear();
 }
+
+//-------------------------------------------------------------------------------------------------
+static void parseWaterFX(INI* ini, void* instance, void* /*store*/, const void* /*userData*/)
+{
+	InstantDeathBehaviorModuleData* self = (InstantDeathBehaviorModuleData*)instance;
+	for (const char* token = ini->getNextToken(); token != nullptr; token = ini->getNextTokenOrNull())
+	{
+		const FXList* fxl = TheFXListStore->findFXList(token);	// could be null! this is OK!
+		self->m_waterFx.push_back(fxl);
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+static void parseWaterOCL(INI* ini, void* instance, void* /*store*/, const void* /*userData*/)
+{
+	InstantDeathBehaviorModuleData* self = (InstantDeathBehaviorModuleData*)instance;
+	for (const char* token = ini->getNextToken(); token != nullptr; token = ini->getNextTokenOrNull())
+	{
+		const ObjectCreationList* ocl = TheObjectCreationListStore->findObjectCreationList(token);	// could be null! this is OK!
+		self->m_waterOcls.push_back(ocl);
+	}
+}
+
 
 //-------------------------------------------------------------------------------------------------
 static void parseFX( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ )
@@ -99,7 +123,9 @@ static void parseWeapon( INI* ini, void *instance, void * /*store*/, const void*
 	static const FieldParse dataFieldParse[] =
 	{
 		{ "FX",										parseFX,													nullptr, 0 },
+		{ "WaterFX",							parseWaterFX,											nullptr, 0 },
 		{ "OCL",									parseOCL,													nullptr, 0 },
+		{ "WaterOCL",							parseWaterOCL,										nullptr, 0 },
 		{ "Weapon",								parseWeapon,											nullptr, 0 },
 		{ nullptr, nullptr, nullptr, 0 }
 	};
@@ -137,24 +163,61 @@ void InstantDeathBehavior::onDie( const DamageInfo *damageInfo )
 
 	size_t idx, listSize;
 
-	listSize = d->m_fx.size();
-	if (listSize > 0)
+	//listSize = d->m_fx.size();
+	//if (listSize > 0)
+	Real waterZ = 0.0f, terrainZ = 0.0f;
+	bool inWater = TheTerrainLogic->isUnderwater(getObject()->getPosition()->x, getObject()->getPosition()->y, &waterZ, &terrainZ);
+
+	// FX: prefer WaterFX if in water and available
+	if (inWater && !d->m_waterFx.empty())
 	{
-		idx = (size_t)GameLogicRandomValue(0, listSize-1);
-		const FXListVec& v = d->m_fx;
+		//idx = (size_t)GameLogicRandomValue(0, listSize-1);
+		//const FXListVec& v = d->m_fx;
+		listSize = d->m_waterFx.size();
+		idx = (size_t)GameLogicRandomValue(0, (Int)listSize - 1);
+		const FXListVec& v = d->m_waterFx;
+
 		DEBUG_ASSERTCRASH(idx>=0&&idx<v.size(),("bad idx"));
 		const FXList* fxl = v[idx];
 		FXList::doFXObj(fxl, getObject(), nullptr);
+
+	} else {
+
+		listSize = d->m_fx.size();
+		if (listSize > 0)
+		{
+		idx = (size_t)GameLogicRandomValue(0, listSize-1);
+			const FXListVec& v = d->m_fx;
+		DEBUG_ASSERTCRASH(idx>=0&&idx<v.size(),("bad idx"));
+			const FXList* fxl = v[idx];
+			FXList::doFXObj(fxl, getObject(), nullptr);
+		}
 	}
 
-	listSize = d->m_ocls.size();
-	if (listSize > 0)
+	//listSize = d->m_ocls.size();
+	//if (listSize > 0)
+	// OCL: prefer WaterOCL if in water and available
+	if (inWater && !d->m_waterOcls.empty())
 	{
-		idx = (size_t)GameLogicRandomValue(0, listSize-1);
-		const OCLVec& v = d->m_ocls;
+		//idx = (size_t)GameLogicRandomValue(0, listSize-1);
+		//const OCLVec& v = d->m_ocls;
+		listSize = d->m_waterOcls.size();
+		idx = (size_t)GameLogicRandomValue(0, (Int)listSize - 1);
+		const OCLVec& v = d->m_waterOcls;
+
 		DEBUG_ASSERTCRASH(idx>=0&&idx<v.size(),("bad idx"));
 		const ObjectCreationList* ocl = v[idx];
 		ObjectCreationList::create(ocl, getObject(), nullptr);
+	} else {
+		listSize = d->m_ocls.size();
+		if (listSize > 0)
+		{
+		idx = (size_t)GameLogicRandomValue(0, listSize-1);
+			const OCLVec& v = d->m_ocls;
+		DEBUG_ASSERTCRASH(idx>=0&&idx<v.size(),("bad idx"));
+			const ObjectCreationList* ocl = v[idx];
+			ObjectCreationList::create(ocl, getObject(), nullptr);
+		}
 	}
 
 	listSize = d->m_weapons.size();

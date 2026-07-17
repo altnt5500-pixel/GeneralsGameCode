@@ -47,6 +47,8 @@ class InstantDeathBehaviorModuleData : public DieModuleData
 public:
 	FXListVec					m_fx;
 	OCLVec						m_ocls;
+	FXListVec					m_waterFx;
+	OCLVec						m_waterOcls;
 	WeaponTemplateVec	m_weapons;
 
 	InstantDeathBehaviorModuleData();

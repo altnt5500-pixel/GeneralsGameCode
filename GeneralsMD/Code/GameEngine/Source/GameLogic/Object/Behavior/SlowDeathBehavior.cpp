@@ -49,6 +49,7 @@
 #include "GameLogic/Object.h"
 #include "GameLogic/ObjectCreationList.h"
 #include "GameLogic/Weapon.h"
+#include "GameLogic/TerrainLogic.h"
 
 
 const Real BEGIN_MIDPOINT_RATIO = 0.35f;
@@ -75,6 +76,35 @@ SlowDeathBehaviorModuleData::SlowDeathBehaviorModuleData()
 	//m_ocls.clear();
 	//m_weapons.clear();
 }
+
+//-------------------------------------------------------------------------------------------------
+static void parseWaterFX(INI* ini, void* instance, void* /*store*/, const void* /*userData*/)
+{
+	SlowDeathBehaviorModuleData* self = (SlowDeathBehaviorModuleData*)instance;
+	SlowDeathPhaseType sdphase = (SlowDeathPhaseType)INI::scanIndexList(ini->getNextToken(), TheSlowDeathPhaseNames);
+	for (const char* token = ini->getNextToken(); token != nullptr; token = ini->getNextTokenOrNull())
+	{
+		const FXList* fxl = TheFXListStore->findFXList(token);	// could be null! this is OK!
+		self->m_waterFx[sdphase].push_back(fxl);
+		if (fxl)
+			self->m_maskOfLoadedEffects |= SlowDeathBehaviorModuleData::HAS_FX;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+static void parseWaterOCL(INI* ini, void* instance, void* /*store*/, const void* /*userData*/)
+{
+	SlowDeathBehaviorModuleData* self = (SlowDeathBehaviorModuleData*)instance;
+	SlowDeathPhaseType sdphase = (SlowDeathPhaseType)INI::scanIndexList(ini->getNextToken(), TheSlowDeathPhaseNames);
+	for (const char* token = ini->getNextToken(); token != nullptr; token = ini->getNextTokenOrNull())
+	{
+		const ObjectCreationList* ocl = TheObjectCreationListStore->findObjectCreationList(token);	// could be null! this is OK!
+		self->m_waterOcls[sdphase].push_back(ocl);
+		if (ocl)
+			self->m_maskOfLoadedEffects |= SlowDeathBehaviorModuleData::HAS_OCL;
+	}
+}
+
 
 //-------------------------------------------------------------------------------------------------
 static void parseFX( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ )
@@ -134,7 +164,9 @@ static void parseWeapon( INI* ini, void *instance, void * /*store*/, const void*
 		{ "DestructionDelayVariance",					INI::parseDurationUnsignedInt,		nullptr, offsetof( SlowDeathBehaviorModuleData, m_destructionDelayVariance ) },
 		{ "DestructionAltitude",							INI::parseReal,										nullptr, offsetof( SlowDeathBehaviorModuleData, m_destructionAltitude ) },
 		{ "FX",																parseFX,													nullptr, 0 },
+		{ "WaterFX",													parseWaterFX,											nullptr, 0 },
 		{ "OCL",															parseOCL,													nullptr, 0 },
+		{ "WaterOCL",													parseWaterOCL,										nullptr, 0 },
 		{ "Weapon",														parseWeapon,											nullptr, 0 },
 		{ "FlingForce",												INI::parseReal,										nullptr, offsetof( SlowDeathBehaviorModuleData, m_flingForce) },
 		{ "FlingForceVariance",								INI::parseReal,										nullptr, offsetof( SlowDeathBehaviorModuleData, m_flingForceVariance) },
@@ -338,24 +370,57 @@ void SlowDeathBehavior::doPhaseStuff(SlowDeathPhaseType sdphase)
 	if (!d->m_maskOfLoadedEffects)
 		return;	//has no ocl, fx, or weapons.
 
-	listSize = d->m_fx[sdphase].size();
-	if (listSize > 0)
+	//listSize = d->m_fx[sdphase].size();
+	//if (listSize > 0)
+	Real waterZ = 0.0f, terrainZ = 0.0f;
+	bool inWater = TheTerrainLogic->isUnderwater(getObject()->getPosition()->x, getObject()->getPosition()->y, &waterZ, &terrainZ);
+
+	// FX: prefer water-specific FX for this phase when underwater
+	if (inWater && !d->m_waterFx[sdphase].empty())
 	{
-		idx = GameLogicRandomValue(0, listSize-1);
-		const FXListVec& v = d->m_fx[sdphase];
+		//idx = GameLogicRandomValue(0, listSize-1);
+		//const FXListVec& v = d->m_fx[sdphase];
+		idx = GameLogicRandomValue(0, (Int)d->m_waterFx[sdphase].size() - 1);
+		const FXListVec& v = d->m_waterFx[sdphase];
+
 		DEBUG_ASSERTCRASH(idx>=0&&idx<v.size(),("bad idx"));
 		const FXList* fxl = v[idx];
 		FXList::doFXObj(fxl, getObject(), nullptr);
+	} else {
+		listSize = d->m_fx[sdphase].size();
+		if (listSize > 0)
+		{
+		  idx = GameLogicRandomValue(0, listSize-1);
+			const FXListVec& v = d->m_fx[sdphase];
+		  DEBUG_ASSERTCRASH(idx>=0&&idx<v.size(),("bad idx"));
+			const FXList* fxl = v[idx];
+			FXList::doFXObj(fxl, getObject(), nullptr);
+		}
 	}
 
-	listSize = d->m_ocls[sdphase].size();
-	if (listSize > 0)
+	//listSize = d->m_ocls[sdphase].size();
+	//if (listSize > 0)
+	// OCL: prefer water-specific OCL for this phase when underwater
+	if (inWater && !d->m_waterOcls[sdphase].empty())
 	{
-		idx = GameLogicRandomValue(0, listSize-1);
-		const OCLVec& v = d->m_ocls[sdphase];
-		DEBUG_ASSERTCRASH(idx>=0&&idx<v.size(),("bad idx"));
+		//idx = GameLogicRandomValue(0, listSize-1);
+		//const OCLVec& v = d->m_ocls[sdphase];
+		idx = GameLogicRandomValue(0, (Int)d->m_waterOcls[sdphase].size() - 1);
+		const OCLVec& v = d->m_waterOcls[sdphase];
+
+		DEBUG_ASSERTCRASH(idx >= 0 && idx < v.size(), ("bad idx"));
 		const ObjectCreationList* ocl = v[idx];
 		ObjectCreationList::create(ocl, getObject(), nullptr);
+	} else {
+		listSize = d->m_ocls[sdphase].size();
+		if (listSize > 0)
+		{
+			idx = GameLogicRandomValue(0, listSize-1);
+			const OCLVec& v = d->m_ocls[sdphase];
+			DEBUG_ASSERTCRASH(idx>=0&&idx<v.size(),("bad idx"));
+			const ObjectCreationList* ocl = v[idx];
+			ObjectCreationList::create(ocl, getObject(), nullptr);
+		}
 	}
 
 	listSize = d->m_weapons[sdphase].size();

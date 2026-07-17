@@ -39,6 +39,7 @@
 #include "GameLogic/ObjectCreationList.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameClient/InGameUI.h"
+#include "GameLogic/TerrainLogic.h"
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
@@ -59,6 +60,7 @@ CreateObjectDieModuleData::CreateObjectDieModuleData()
 	static const FieldParse dataFieldParse[] =
 	{
 		{ "CreationList",	INI::parseObjectCreationList,		nullptr,											offsetof( CreateObjectDieModuleData, m_ocl ) },
+		{ "WaterOCL",		INI::parseObjectCreationList,		nullptr,											offsetof(CreateObjectDieModuleData, m_waterOcl) },
 		{ "TransferPreviousHealth", INI::parseBool, nullptr	,offsetof( CreateObjectDieModuleData, m_transferPreviousHealth ) },
 		{ "TransferSelection", INI::parseBool, nullptr, offsetof( CreateObjectDieModuleData, m_transferSelection ) },
 		{ nullptr, nullptr, nullptr, 0 }
@@ -93,9 +95,24 @@ void CreateObjectDie::onDie( const DamageInfo * damageInfo )
 	if (!isDieApplicable(damageInfo))
 		return;
 
-	Object *damageDealer = TheGameLogic->findObjectByID( damageInfo->in.m_sourceID );
+	//Object *damageDealer = TheGameLogic->findObjectByID( damageInfo->in.m_sourceID );
 
-	Object *newObject = ObjectCreationList::create( data->m_ocl, getObject(), damageDealer );
+	//Object *newObject = ObjectCreationList::create( data->m_ocl, getObject(), damageDealer );
+	//if (!newObject)
+	Real waterZ = 0.0f, terrainZ = 0.0f;
+	const Coord3D* pos = getObject()->getPosition();
+	bool inWater = TheTerrainLogic->isUnderwater(pos->x, pos->y, &waterZ, &terrainZ);
+
+	Object* newObject = nullptr;
+	if (inWater && data->m_waterOcl)
+	{
+		newObject = ObjectCreationList::create(data->m_waterOcl, getObject(), nullptr);
+	}
+	else if (data->m_ocl)
+	{
+		newObject = ObjectCreationList::create(data->m_ocl, getObject(), nullptr);
+	}
+
 	if (!newObject)
 		return;
 
@@ -124,7 +141,11 @@ void CreateObjectDie::onDie( const DamageInfo * damageInfo )
 			//Now transfer the previous health from the old object to the new.
 			damInfo.in.m_amount = oldBody->getMaxHealth() - oldBody->getPreviousHealth();
 			damInfo.in.m_damageType = DAMAGE_UNRESISTABLE;
-			damInfo.in.m_sourceID = oldBody->getLastDamageInfo()->in.m_sourceID;
+			//damInfo.in.m_sourceID = oldBody->getLastDamageInfo()->in.m_sourceID;
+			if (oldBody->getLastDamageInfo())
+				damInfo.in.m_sourceID = oldBody->getLastDamageInfo()->in.m_sourceID;
+			else
+				damInfo.in.m_sourceID = INVALID_ID;
 			if( damInfo.in.m_amount > 0.0f )
 			{
 				newBody->attemptDamage( &damInfo );
@@ -139,7 +160,7 @@ void CreateObjectDie::onDie( const DamageInfo * damageInfo )
 			if (!ai)
 				continue;
 
-			ai->transferAttack( oldObject->getID(), newObject->getID() );
+			ai->transferAttack( getObject()->getID(), newObject->getID());
 		}
 	}
 

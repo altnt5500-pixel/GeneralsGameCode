@@ -82,6 +82,8 @@ public:
 	UnsignedInt				m_destructionDelayVariance;
 	FXListVec					m_fx[SD_PHASE_COUNT];
 	OCLVec						m_ocls[SD_PHASE_COUNT];
+	FXListVec					m_waterFx[SD_PHASE_COUNT];
+	OCLVec						m_waterOcls[SD_PHASE_COUNT];
 	WeaponTemplateVec	m_weapons[SD_PHASE_COUNT];
 	Real							m_flingForce;
 	Real							m_flingForceVariance;

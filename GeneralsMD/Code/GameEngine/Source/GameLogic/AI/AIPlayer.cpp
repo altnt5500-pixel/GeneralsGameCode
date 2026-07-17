@@ -378,9 +378,24 @@ void AIPlayer::queueSupplyTruck()
 					}
 				}
 			}
-			if (totalHarvesters >= desiredGatherers*3) {
-				continue; // we got lotsa gatherers.
+			Int supplyCount = 0;
+			for (BuildListInfo* inf2 = m_player->getBuildList(); inf2; inf2 = inf2->getNext())
+			{
+				if (!inf2->isSupplyBuilding()) continue;
+				Object* centerObj = TheGameLogic->findObjectByID(inf2->getObjectID());
+				if (centerObj == nullptr) continue;
+				if (centerObj->isKindOf(KINDOF_REBUILD_HOLE)) continue;
+				supplyCount++;
 			}
+			if (supplyCount <= 0) supplyCount = 1;
+
+			if (totalHarvesters >= desiredGatherers * supplyCount)
+			{
+				continue;
+			}
+			//if (totalHarvesters >= desiredGatherers*3) {
+			//	continue; // we got lotsa gatherers.
+			//}
 			Bool canBuildUnits = m_player->getCanBuildUnits();
 			// If we need a supply truck thingy, turn on unit building for a moment.
 			m_player->setCanBuildUnits(true);
@@ -1982,6 +1997,31 @@ void AIPlayer::buildBySupplies(Int minimumCash, const AsciiString& thingName)
 				DEBUG_LOG(("buildAISupplyCenter -- SUCCESS at (%.2f,%.2f)", newPos.x, newPos.y));
 			location = newPos;
 		}
+
+		if (tTemplate->isKindOf(KINDOF_CASH_GENERATOR))
+		{
+			Coord3D searchCenter = location;
+			Real searchRadius = SUPPLY_CENTER_CLOSE_DIST + bestSupplyWarehouse->getGeometryInfo().getBoundingCircleRadius();
+
+			PartitionFilterAcceptByKindOf f1(MAKE_KINDOF_MASK(KINDOF_SUPPLY_SOURCE), KINDOFMASK_NONE);
+			PartitionFilterPlayer f2(m_player, false);
+			PartitionFilterOnMap f3;
+			PartitionFilter* filters[] = { &f1, &f2, &f3, nullptr };
+
+			Object* closestSupplySource = ThePartitionManager->getClosestObject(&searchCenter, searchRadius, FROM_BOUNDINGSPHERE_2D, filters);
+			if (closestSupplySource)
+			{
+				const Coord3D* srcPos = closestSupplySource->getPosition();
+				Real dx = srcPos->x - location.x;
+				Real dy = srcPos->y - location.y;
+				Real desiredAngle = atan2(dy, dx);
+
+				// desiredAngle += (Real)M_PI; // uncomment if you find it's backwards
+
+				angle = normalizeAngle(desiredAngle);
+			}
+		}
+
 		TheTerrainVisual->removeAllBibs();	// isLocationLegalToBuild adds bib feedback, turn it off.  jba.
 		location.z = 0; // All build list locations are ground relative.
 		m_player->addToPriorityBuildList(thingName, &location, angle);
@@ -2219,11 +2259,62 @@ Object *AIPlayer::findSupplyCenter(Int minimumCash)
 			if (!obj->isKindOf(KINDOF_STRUCTURE)) continue;
 			if (!obj->isKindOf(KINDOF_SUPPLY_SOURCE)) continue;
 			static const NameKeyType key_warehouseUpdate = NAMEKEY("SupplyWarehouseDockUpdate");
-			SupplyWarehouseDockUpdate *warehouseModule = (SupplyWarehouseDockUpdate*)obj->findUpdateModule( key_warehouseUpdate );
-			if( warehouseModule )	{
-				Int availableCash = warehouseModule->getBoxesStored()*TheGlobalData->m_baseValuePerSupplyBox;
-				if (availableCash<minimumCash) continue;
-				if( m_player->getRelationship(obj->getTeam()) == ENEMIES ) {
+			//SupplyWarehouseDockUpdate *warehouseModule = (SupplyWarehouseDockUpdate*)obj->findUpdateModule( key_warehouseUpdate );
+			//if( warehouseModule )	{
+			//	Int availableCash = warehouseModule->getBoxesStored()*TheGlobalData->m_baseValuePerSupplyBox;
+			//	if (availableCash<minimumCash) continue;
+			//	if( m_player->getRelationship(obj->getTeam()) == ENEMIES ) {
+			SupplyWarehouseDockUpdate* warehouseModule = (SupplyWarehouseDockUpdate*)obj->findUpdateModule(key_warehouseUpdate);
+			if (warehouseModule) {
+				Int availableCash = warehouseModule->getBoxesStored() * TheGlobalData->m_baseValuePerSupplyBox;
+				if (availableCash < minimumCash) continue;
+				if (m_player->getRelationship(obj->getTeam()) == ENEMIES) {
+					continue;
+				}
+
+				// CL 17/01/2026
+				// Skip supply sources that are already being harvested by any player.
+				// Only consider a harvester "using" this source if it either:
+				// has this source as its preferred dock
+				// OR
+				// is currently ferrying aka forced into wanting AND is close to this source
+				Bool beingHarvested = false;
+				// radius to consider a harvester "near" this supply source
+				Real nearbyRadius = SUPPLY_CENTER_CLOSE_DIST + obj->getGeometryInfo().getBoundingCircleRadius() + 5 * PATHFIND_CELL_SIZE_F;
+				Real nearbyRadiusSqr = nearbyRadius * nearbyRadius;
+				for (Object* other = TheGameLogic->getFirstObject(); other; other = other->getNextObject())
+				{
+					if (!other->isKindOf(KINDOF_HARVESTER)) continue;
+					if (!other->getAI()) continue;
+					SupplyTruckAIInterface* stAI = other->getAI()->getSupplyTruckAIInterface();
+					if (!stAI) continue;
+
+					ObjectID prefDock = stAI->getPreferredDockID();
+					// If this harvester explicitly prefers this dock, its using it.
+					if (prefDock == obj->getID())
+					{
+						beingHarvested = true;
+						break;
+					}
+
+					// If harvester is ferrying supplies (or forced into wanting) then
+					// only treat it as using this source if it is physically near the source.
+					if (stAI->isCurrentlyFerryingSupplies() || stAI->isForcedIntoWantingState())
+					{
+						const Coord3D* otherPos = other->getPosition();
+						const Coord3D* srcPos = obj->getPosition();
+						Real dx = otherPos->x - srcPos->x;
+						Real dy = otherPos->y - srcPos->y;
+						if (dx * dx + dy * dy <= nearbyRadiusSqr)
+						{
+							beingHarvested = true;
+							break;
+						}
+					}
+				}
+				if (beingHarvested)
+				{
+					// Someone is already using this nearby supply source, skip it.
 					continue;
 				}
 

@@ -448,8 +448,10 @@ public:
 
 	const FXList* getFireFX(VeterancyLevel v) const { return m_fireFXs[v]; }
 	const FXList* getProjectileDetonateFX(VeterancyLevel v) const { return m_projectileDetonateFXs[v]; }
+	const FXList* getProjectileWaterDetonateFX(VeterancyLevel v) const { return m_projectileWaterDetonateFXs[v]; }
 	const ObjectCreationList* getFireOCL(VeterancyLevel v) const { return m_fireOCLs[v]; }
 	const ObjectCreationList* getProjectileDetonationOCL(VeterancyLevel v) const { return m_projectileDetonationOCLs[v]; }
+	const ObjectCreationList* getProjectileWaterDetonationOCL(VeterancyLevel v) const { return m_projectileWaterDetonationOCLs[v]; }
 	const ParticleSystemTemplate* getProjectileExhaust(VeterancyLevel v) const { return m_projectileExhausts[v]; }
 
 	const AudioEventRTS& getFireSound() const { return m_fireSound; }
@@ -524,11 +526,14 @@ private:
 	const ThingTemplate* m_projectileTmpl;														///< direct access to projectile object type to "fire"
 	AsciiString m_fireOCLNames[LEVEL_COUNT];														///< Name of OCL to create at firing
 	AsciiString m_projectileDetonationOCLNames[LEVEL_COUNT];						///< Name of OCL to create at firing at missile's end
+	AsciiString m_projectileWaterDetonationOCLNames[LEVEL_COUNT];						///< Name of OCL to create at firing at missile's end if its in water
 	const ParticleSystemTemplate* m_projectileExhausts[LEVEL_COUNT];			///< Templates of particle systems for projectile exhaust
 	const ObjectCreationList* m_fireOCLs[LEVEL_COUNT];									///< Post-loaded lookup of name string for ease and speed
 	const ObjectCreationList* m_projectileDetonationOCLs[LEVEL_COUNT];	///< Post-loaded lookup of name string for ease and speed (and subsystem init order)
+	const ObjectCreationList* m_projectileWaterDetonationOCLs[LEVEL_COUNT];
 	const FXList* m_fireFXs[LEVEL_COUNT];															///< weapon is fired fx
 	const FXList* m_projectileDetonateFXs[LEVEL_COUNT];								///< if we have a projectile, fx for projectile blowing up
+	const FXList* m_projectileWaterDetonateFXs[LEVEL_COUNT];	        ///< if we have a projectile, fx for projectile blowing up in water
 	AudioEventRTS m_fireSound;							///< weapon is fired sound
 	UnsignedInt m_fireSoundLoopTime;				///< if nonzero, num frames for looping of fire sound
 	WeaponBonusSet* m_extraBonus;						///< optional extra per-weapon bonus

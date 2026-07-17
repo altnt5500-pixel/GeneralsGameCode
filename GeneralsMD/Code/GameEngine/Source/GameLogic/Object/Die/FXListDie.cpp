@@ -41,6 +41,7 @@
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/FXListDie.h"
 #include "GameLogic/Module/AIUpdate.h"
+#include "GameLogic/TerrainLogic.h"
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
@@ -82,16 +83,35 @@ void FXListDie::onDie( const DamageInfo *damageInfo )
 		return;
 	}
 
-	if (d->m_defaultDeathFX)
+	//if (d->m_defaultDeathFX)
+	if (d->m_defaultDeathFX || d->m_defaultDeathWaterFX)
 	{
-		if (d->m_orientToObject)
-		{
-			Object *damageDealer = TheGameLogic->findObjectByID( damageInfo->in.m_sourceID );
-			FXList::doFXObj(getFXListDieModuleData()->m_defaultDeathFX, getObject(), damageDealer);
-		}
+		//if (d->m_orientToObject)
+		//{
+		//	Object *damageDealer = TheGameLogic->findObjectByID( damageInfo->in.m_sourceID );
+		//	FXList::doFXObj(getFXListDieModuleData()->m_defaultDeathFX, getObject(), damageDealer);
+		//}
+		// prefer water FX when dying in water
+		Real waterZ = 0.0f, terrainZ = 0.0f;
+		bool inWater = TheTerrainLogic->isUnderwater(getObject()->getPosition()->x, getObject()->getPosition()->y, &waterZ, &terrainZ);
+		const FXList* chosenFX = nullptr;
+		if (inWater && d->m_defaultDeathWaterFX)
+			chosenFX = d->m_defaultDeathWaterFX;
 		else
+			chosenFX = d->m_defaultDeathFX;
+
+		if (chosenFX)
 		{
-			FXList::doFXPos(getFXListDieModuleData()->m_defaultDeathFX, getObject()->getPosition());
+			//FXList::doFXPos(getFXListDieModuleData()->m_defaultDeathFX, getObject()->getPosition());
+			if (d->m_orientToObject)
+			{
+				Object* damageDealer = TheGameLogic->findObjectByID(damageInfo->in.m_sourceID);
+				FXList::doFXObj(chosenFX, getObject(), damageDealer);
+			}
+			else
+			{
+				FXList::doFXPos(chosenFX, getObject()->getPosition());
+			}
 		}
 	}
 }

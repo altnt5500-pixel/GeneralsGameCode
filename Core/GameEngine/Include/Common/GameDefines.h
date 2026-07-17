@@ -23,6 +23,10 @@
 // Note: Retail compatibility must not be broken before this project officially does.
 // Use RETAIL_COMPATIBLE_CRC and RETAIL_COMPATIBLE_XFER_SAVE to guard breaking changes.
 
+//#ifndef TEOD
+//#define TEOD (1) // The End of Days
+//#endif
+
 #ifndef PRESERVE_BUILDING_RESUMPTION_DELAY
 #define PRESERVE_BUILDING_RESUMPTION_DELAY (0) // The fix for this unfavorable behavior was approved by the Game Design Committee.
 #endif
@@ -84,30 +88,54 @@
 #endif
 
 #ifndef RETAIL_COMPATIBLE_CRC
+#if defined(TEOD)
+#define RETAIL_COMPATIBLE_CRC (0)
+#else
 #define RETAIL_COMPATIBLE_CRC (1) // Game is expected to be CRC compatible with retail Generals 1.08, Zero Hour 1.04
+#endif
 #endif
 
 #ifndef RETAIL_COMPATIBLE_XFER_SAVE
+#if defined(TEOD)
+#define RETAIL_COMPATIBLE_XFER_SAVE (0)
+#else
 #define RETAIL_COMPATIBLE_XFER_SAVE (1) // Game is expected to be Xfer Save compatible with retail Generals 1.08, Zero Hour 1.04
+#endif
 #endif
 
 // This is here to easily toggle between the retail compatible with fixed pathfinding fallback and pure fixed pathfinding mode
 #ifndef RETAIL_COMPATIBLE_PATHFINDING
+#if defined(TEOD)
 #define RETAIL_COMPATIBLE_PATHFINDING (1)
+#else
+#define RETAIL_COMPATIBLE_PATHFINDING (1)
+#endif
 #endif
 
 // This is here to easily toggle between the retail compatible pathfinding memory allocation and the new static allocated data mode
 #ifndef RETAIL_COMPATIBLE_PATHFINDING_ALLOCATION
+#if defined(TEOD)
+#define RETAIL_COMPATIBLE_PATHFINDING_ALLOCATION (0)
+#else
 #define RETAIL_COMPATIBLE_PATHFINDING_ALLOCATION (1)
+#endif
 #endif
 
 #ifndef RETAIL_COMPATIBLE_CIRCLE_FILL_ALGORITHM
+#if defined(TEOD)
+#define RETAIL_COMPATIBLE_CIRCLE_FILL_ALGORITHM (1)
+#else
 #define RETAIL_COMPATIBLE_CIRCLE_FILL_ALGORITHM (1) // Use the original circle fill algorithm, which is more efficient but less accurate
+#endif
 #endif
 
 // Disable non retail fixes in the networking, such as putting more data per UDP packet
 #ifndef RETAIL_COMPATIBLE_NETWORKING
+#if defined(TEOD)
 #define RETAIL_COMPATIBLE_NETWORKING (1)
+#else
+#define RETAIL_COMPATIBLE_NETWORKING (1)
+#endif
 #endif
 
 // This is essentially synonymous for RETAIL_COMPATIBLE_CRC. There is a lot wrong with AIGroup, such as use-after-free, double-free, leaks,
@@ -115,7 +143,11 @@
 // but put them behind this macro.
 
 #ifndef RETAIL_COMPATIBLE_AIGROUP
+#if defined(TEOD)
+#define RETAIL_COMPATIBLE_AIGROUP (0)
+#else
 #define RETAIL_COMPATIBLE_AIGROUP (1) // AIGroup logic is expected to be CRC compatible with retail Generals 1.08, Zero Hour 1.04
+#endif
 #endif
 
 #ifndef ENABLE_GAMETEXT_SUBSTITUTES
@@ -123,7 +155,11 @@
 #endif
 
 #ifndef ALLOW_MONEY_PER_MINUTE_FOR_PLAYER
+#if defined(TEOD)
+#define ALLOW_MONEY_PER_MINUTE_FOR_PLAYER (0) // Change this when we have the UI for that.
+#else
 #define ALLOW_MONEY_PER_MINUTE_FOR_PLAYER (0) // When enabled, a money-per-minute stat is calculated and displayed in-game
+#endif
 #endif
 
 // Previously the configurable shroud sat behind #if defined(RTS_DEBUG)

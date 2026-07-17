@@ -191,11 +191,15 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "FireSoundLoopTime",				INI::parseDurationUnsignedInt,					nullptr,							offsetof(WeaponTemplate, m_fireSoundLoopTime) },
 	{ "FireFX",											parseAllVetLevelsFXList,							nullptr,							offsetof(WeaponTemplate, m_fireFXs) },
 	{ "ProjectileDetonationFX",			parseAllVetLevelsFXList,							nullptr,							offsetof(WeaponTemplate, m_projectileDetonateFXs) },
+	{ "WaterProjectileDetonationFX",	parseAllVetLevelsFXList,						nullptr,							offsetof(WeaponTemplate, m_projectileWaterDetonateFXs) },
 	{ "FireOCL",										parseAllVetLevelsAsciiString,					nullptr,							offsetof(WeaponTemplate, m_fireOCLNames) },
 	{ "ProjectileDetonationOCL",		parseAllVetLevelsAsciiString,					nullptr,							offsetof(WeaponTemplate, m_projectileDetonationOCLNames) },
+	{ "WaterProjectileDetonationOCL",		parseAllVetLevelsAsciiString,			nullptr,							offsetof(WeaponTemplate, m_projectileWaterDetonationOCLNames) },
 	{ "ProjectileExhaust",					parseAllVetLevelsPSys,								nullptr,							offsetof(WeaponTemplate, m_projectileExhausts) },
 	{ "VeterancyFireFX",										parsePerVetLevelFXList,				nullptr,							offsetof(WeaponTemplate, m_fireFXs) },
 	{ "VeterancyProjectileDetonationFX",		parsePerVetLevelFXList,				nullptr,							offsetof(WeaponTemplate, m_projectileDetonateFXs) },
+	{ "WaterVeterancyProjectileDetonationFX",	parsePerVetLevelFXList,			nullptr,							offsetof(WeaponTemplate, m_projectileWaterDetonateFXs) },
+	{ "WaterVeterancyProjectileDetonationOCL",		parsePerVetLevelAsciiString,	nullptr,				offsetof(WeaponTemplate, m_projectileWaterDetonationOCLNames) },
 	{ "VeterancyFireOCL",										parsePerVetLevelAsciiString,	nullptr,							offsetof(WeaponTemplate, m_fireOCLNames) },
 	{ "VeterancyProjectileDetonationOCL",		parsePerVetLevelAsciiString,	nullptr,							offsetof(WeaponTemplate, m_projectileDetonationOCLNames) },
 	{ "VeterancyProjectileExhaust",					parsePerVetLevelPSys,					nullptr,							offsetof(WeaponTemplate, m_projectileExhausts) },
@@ -280,9 +284,11 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(nullptr)
 	{
 		m_fireOCLNames[i].clear();
 		m_projectileDetonationOCLNames[i].clear();
+		m_projectileWaterDetonationOCLNames[i].clear();
 		m_projectileExhausts[i]					= nullptr;
 		m_fireOCLs[i]										= nullptr;
 		m_projectileDetonationOCLs[i]		= nullptr;
+		m_projectileWaterDetonationOCLs[i] = nullptr;
 		m_fireFXs[i]										= nullptr;
 		m_projectileDetonateFXs[i]			= nullptr;
 	}
@@ -446,6 +452,19 @@ void WeaponTemplate::postProcessLoad()
 			DEBUG_ASSERTCRASH(m_projectileDetonationOCLs[i], ("OCL %s not found in a weapon!",m_projectileDetonationOCLNames[i].str()));
 		}
 		m_projectileDetonationOCLNames[i].clear();
+
+
+		// And the water-specific projectile-detonation OCL if there is one
+		if (m_projectileWaterDetonationOCLNames[i].isEmpty())
+		{
+			m_projectileWaterDetonationOCLs[i] = nullptr;
+		}
+		else
+		{
+			m_projectileWaterDetonationOCLs[i] = TheObjectCreationListStore->findObjectCreationList(m_projectileWaterDetonationOCLNames[i].str());
+			DEBUG_ASSERTCRASH(m_projectileWaterDetonationOCLs[i], ("OCL %s not found in a weapon!", m_projectileWaterDetonationOCLNames[i].str()));
+		}
+		m_projectileWaterDetonationOCLNames[i].clear();
 	}
 
 }
@@ -907,7 +926,21 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 		Real reAngle = getWeaponRecoilAmount();
 		Real reDir = reAngle != 0.0f ? (atan2(victimPos->y - sourcePos->y, victimPos->x - sourcePos->x)) : 0.0f;
 		VeterancyLevel v = sourceObj->getVeterancyLevel();
-		const FXList* fx = isProjectileDetonation ? getProjectileDetonateFX(v) : getFireFX(v);
+		//const FXList* fx = isProjectileDetonation ? getProjectileDetonateFX(v) : getFireFX(v);
+		const FXList* fx = nullptr;
+		if (isProjectileDetonation)
+		{
+			// Determine if detonation occurs in water; prefer water FX if present, otherwise fallback.
+			Real waterZ = 0.0f;
+			Real terrainZ = 0.0f;
+			bool inWater = TheTerrainLogic->isUnderwater(victimPos->x, victimPos->y, &waterZ, &terrainZ);
+			if (inWater)
+				fx = getProjectileWaterDetonateFX(v);
+			if (!fx)
+				fx = getProjectileDetonateFX(v);
+			} else {
+			fx = getFireFX(v);
+		}
 
 		if ( TheGameLogic->getFrame() < firingWeapon->getSuspendFXFrame() )
 			fx = nullptr;
@@ -949,9 +982,46 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 	if( sourceObj )
 	{
 		VeterancyLevel v = sourceObj->getVeterancyLevel();
-		const ObjectCreationList *oclToUse = isProjectileDetonation ? getProjectileDetonationOCL(v) : getFireOCL(v);
-		if( oclToUse )
-			ObjectCreationList::create( oclToUse, sourceObj, nullptr );
+		//const ObjectCreationList *oclToUse = isProjectileDetonation ? getProjectileDetonationOCL(v) : getFireOCL(v);
+		//if( oclToUse )
+		//	ObjectCreationList::create( oclToUse, sourceObj, nullptr );
+
+		if (isProjectileDetonation)
+		{
+			// Check if detonation happened in water
+			Real waterZ = 0.0f;
+			Real terrainZ = 0.0f;
+			bool inWater = TheTerrainLogic->isUnderwater(victimPos->x, victimPos->y, &waterZ, &terrainZ);
+
+			if (inWater)
+			{
+				const ObjectCreationList* oclToUse = getProjectileWaterDetonationOCL(v);
+				if (oclToUse)
+					ObjectCreationList::create(oclToUse, sourceObj, nullptr);
+
+				// If no water-specific OCL is defined then fall back to normal detonation OCL
+				if (!oclToUse)
+				{
+					const ObjectCreationList* fallback = getProjectileDetonationOCL(v);
+					if (fallback)
+						ObjectCreationList::create(fallback, sourceObj, nullptr);
+				}
+			}
+			else
+			{
+				// Land so normal detonation OCL
+				const ObjectCreationList* oclToUse = getProjectileDetonationOCL(v);
+				if (oclToUse)
+					ObjectCreationList::create(oclToUse, sourceObj, nullptr);
+			}
+		}
+		else
+		{
+			// Non-projectile fire: run FireOCL
+			const ObjectCreationList* ocl = getFireOCL(v);
+			if (ocl)
+				ObjectCreationList::create(ocl, sourceObj, nullptr);
+		}
 	}
 
 	Coord3D projectileDestination = *victimPos; //Need to copy this, as we have a pointer to their actual position

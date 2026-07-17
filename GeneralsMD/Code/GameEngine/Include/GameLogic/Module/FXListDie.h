@@ -45,6 +45,7 @@ class FXListDieModuleData : public DieModuleData
 {
 public:
 	const FXList					*m_defaultDeathFX;								///< default fx to make
+	const FXList          *m_defaultDeathWaterFX;           ///< default fx to make if the object is in water
 	UpgradeMuxData				m_upgradeMuxData;
 	Bool									m_orientToObject;
 	Bool									m_initiallyActive;
@@ -52,6 +53,7 @@ public:
 	FXListDieModuleData()
 	{
 		m_defaultDeathFX = nullptr;
+		m_defaultDeathWaterFX = nullptr;
 		m_orientToObject = TRUE;
 		m_initiallyActive = TRUE; //Patch 1.02 -- Craptacular HACK -- should default to FALSE but only ONE case sets it false out of 847!
 	}
@@ -64,6 +66,7 @@ public:
 		{
 			{ "StartsActive",					INI::parseBool, nullptr, offsetof( FXListDieModuleData, m_initiallyActive ) },
 			{ "DeathFX",							INI::parseFXList,		nullptr, offsetof( FXListDieModuleData, m_defaultDeathFX ) },
+			{ "WaterDeathFX",				INI::parseFXList,		nullptr, offsetof(FXListDieModuleData, m_defaultDeathWaterFX) },
 			{ "OrientToObject",				INI::parseBool,		nullptr, offsetof( FXListDieModuleData, m_orientToObject ) },
 			{ 0, 0, 0, 0 }
 		};

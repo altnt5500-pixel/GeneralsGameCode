@@ -56,6 +56,8 @@ static const char *const TheWeaponSlotTypeNames[] =
 	"PRIMARY",
 	"SECONDARY",
 	"TERTIARY",
+	"QUATERNARY",
+	"QUINARY",
 
 	nullptr
 };
@@ -66,6 +68,8 @@ static const LookupListRec TheWeaponSlotTypeNamesLookupList[] =
 	{ "PRIMARY",		PRIMARY_WEAPON },
 	{ "SECONDARY",	SECONDARY_WEAPON },
 	{ "TERTIARY",		TERTIARY_WEAPON },
+	{ "QUATERNARY",	QUATERNARY_WEAPON },
+	{ "QUINARY",		QUINARY_WEAPON },
 
 	{ nullptr, 0	}
 };

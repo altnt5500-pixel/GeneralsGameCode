@@ -375,6 +375,24 @@ Bool StealthUpdate::allowedToStealth( Object *stealthOwner ) const
 				return FALSE;
 			}
 		}
+		if( flags & STEALTH_NOT_WHILE_FIRING_QUATERNARY )
+		{
+			//Check quaternary weapon status
+			weapon = self->getWeaponInWeaponSlot( QUATERNARY_WEAPON );
+			if( weapon && weapon->getLastShotFrame() >= lastFrame )
+			{
+				return FALSE;
+			}
+		}
+		if( flags & STEALTH_NOT_WHILE_FIRING_QUINARY )
+		{
+			//Check quinary weapon status
+			weapon = self->getWeaponInWeaponSlot( QUINARY_WEAPON );
+			if( weapon && weapon->getLastShotFrame() >= lastFrame )
+			{
+				return FALSE;
+			}
+		}
 	}
 
 	const Object *containedBy = self->getContainedBy();

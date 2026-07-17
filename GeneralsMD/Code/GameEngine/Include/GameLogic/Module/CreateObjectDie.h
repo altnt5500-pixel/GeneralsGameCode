@@ -44,6 +44,7 @@ class CreateObjectDieModuleData : public DieModuleData
 public:
 
 	const ObjectCreationList* m_ocl;			///< object creaton list to make
+  const ObjectCreationList* m_waterOcl; ///< object creation list to make if the object is in water
 	Bool m_transferPreviousHealth; ///< Transfers previous health before death to the new object created.
 	Bool m_transferSelection;      ///< Transfers selection state before death to the new object created.
 
