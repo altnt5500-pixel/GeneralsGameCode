@@ -110,7 +110,7 @@ set(GAMEENGINEDEVICE_SRC
 #    Source/W3DDevice/GameClient/GUI/Gadget/W3DTabControl.cpp
 #    Source/W3DDevice/GameClient/GUI/Gadget/W3DTextEntry.cpp
 #    Source/W3DDevice/GameClient/GUI/Gadget/W3DVerticalSlider.cpp
-    Source/W3DDevice/GameClient/GUI/GUICallbacks/W3DControlBar.cpp
+#    Source/W3DDevice/GameClient/GUI/GUICallbacks/W3DControlBar.cpp
     Source/W3DDevice/GameClient/GUI/GUICallbacks/W3DMainMenu.cpp
     Source/W3DDevice/GameClient/GUI/GUICallbacks/W3DMOTD.cpp
     Source/W3DDevice/GameClient/GUI/W3DGameFont.cpp
@@ -200,6 +200,7 @@ target_link_libraries(g_gameenginedevice PRIVATE
     corei_gameenginedevice_private
     gi_always
     gi_main
+    stb
 )
 
 target_link_libraries(g_gameenginedevice PUBLIC

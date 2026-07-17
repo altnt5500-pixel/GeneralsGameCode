@@ -58,6 +58,7 @@
 #include "GameLogic/Module/BodyModule.h"
 
 #include "GameClient/Color.h"
+#include "GameClient/Display.h"
 #include "GameClient/TerrainVisual.h"
 
 #include "GameNetwork/FirewallHelper.h"
@@ -654,6 +655,7 @@ GlobalData::GlobalData()
 	m_enableDynamicLOD = TRUE;
 	m_enableStaticLOD = TRUE;
 	m_rightMouseAlwaysScrolls = FALSE;
+	m_jpegQuality = DEFAULT_JPEG_QUALITY;
 	m_useWaterPlane = FALSE;
 	m_useCloudPlane = FALSE;
 	m_downwindAngle = ( -0.785f );//Northeast!
@@ -963,6 +965,8 @@ GlobalData::GlobalData()
 	m_showMoneyPerMinute = FALSE;
 	m_allowMoneyPerMinuteForPlayer = FALSE;
 
+	m_gameWindowTransitionSpeedMultiplier = 1.0f;
+
 	m_debugShowGraphicalFramerate = FALSE;
 
 	// By default, show all asserts.
@@ -1012,7 +1016,6 @@ GlobalData::GlobalData()
 	m_shellMapOn =TRUE;
 	m_playIntro = TRUE;
 	m_playSizzle = TRUE;
-	m_afterIntro = FALSE;
 	m_allowExitOutOfMovies = FALSE;
 	m_loadScreenRender = FALSE;
 
@@ -1053,7 +1056,15 @@ GlobalData::GlobalData()
 	//-allAdvice feature
 	//m_allAdvice = FALSE;
 
+	m_useAlternateMouse = FALSE;
+#if RTS_GENERALS
+	// disable mouse scrolling in alternate mouse mode, per Harvard 7/15/03
+	m_useRightMouseScrollWithAlternateMouse = FALSE;
+#else
+	m_useRightMouseScrollWithAlternateMouse = TRUE;
+#endif
 	m_clientRetaliationModeEnabled = TRUE; //On by default.
+	m_doubleClickAttackMove = FALSE;
 
 }
 
@@ -1194,8 +1205,10 @@ void GlobalData::parseGameDataDefinition( INI* ini )
 	// override INI values with user preferences
 	OptionPreferences optionPref;
 	TheWritableGlobalData->m_useAlternateMouse = optionPref.getAlternateMouseModeEnabled();
+	TheWritableGlobalData->m_useRightMouseScrollWithAlternateMouse = optionPref.getRightMouseScrollWithAlternateMouseEnabled();
 	TheWritableGlobalData->m_clientRetaliationModeEnabled = optionPref.getRetaliationModeEnabled();
 	TheWritableGlobalData->m_doubleClickAttackMove = optionPref.getDoubleClickAttackMoveEnabled();
+	TheWritableGlobalData->m_jpegQuality = optionPref.getJpegQuality();
 	TheWritableGlobalData->m_keyboardScrollFactor = optionPref.getScrollFactor();
 	TheWritableGlobalData->m_drawScrollAnchor = optionPref.getDrawScrollAnchor();
 	TheWritableGlobalData->m_moveScrollAnchor = optionPref.getMoveScrollAnchor();
@@ -1215,6 +1228,7 @@ void GlobalData::parseGameDataDefinition( INI* ini )
 	TheWritableGlobalData->m_gameTimeFontSize = optionPref.getGameTimeFontSize();
 	TheWritableGlobalData->m_playerInfoListFontSize = optionPref.getPlayerInfoListFontSize();
 	TheWritableGlobalData->m_showMoneyPerMinute = optionPref.getShowMoneyPerMinute();
+	TheWritableGlobalData->m_gameWindowTransitionSpeedMultiplier = optionPref.getGameWindowTransitionSpeedMultiplier();
 
 	TheWritableGlobalData->m_antiAliasLevel = optionPref.getAntiAliasing();
 	TheWritableGlobalData->m_textureFilteringMode = optionPref.getTextureFilterMode();
