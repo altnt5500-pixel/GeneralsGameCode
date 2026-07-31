@@ -454,7 +454,46 @@ StateReturnType AIGuardInnerState::update()
 			m_exitConditions.m_center = *targetToGuard->getPosition();
 		}
 
-		return m_attackState->update();
+		StateReturnType ret = m_attackState->update();
+
+		// If still running or sleeping, just propagate that.
+		if (ret == STATE_CONTINUE || IS_STATE_SLEEP(ret))
+			return ret;
+
+		// Attack sub-state finished (success or failure). Clean it up.
+		m_attackState->onExit(EXIT_NORMAL);
+		deleteInstance(m_attackState);
+		m_attackState = nullptr;
+
+		// If attack finished successfully (target dead), check immediately for another inner target.
+		if (ret == STATE_SUCCESS)
+		{
+			// If we find another inner target, recreate the attack state and continue attacking
+			if (getGuardMachine()->lookForInnerTarget())
+			{
+				Object* newTargetToGuard = getGuardMachine()->findTargetToGuardByID();
+				Coord3D pos = newTargetToGuard ? *newTargetToGuard->getPosition() : *getGuardMachine()->getPositionToGuard();
+				Object* nemesis = TheGameLogic->findObjectByID(getGuardMachine()->getNemesisID());
+				if (nemesis)
+				{
+					m_exitConditions.m_center = pos;
+					m_exitConditions.m_radiusSqr = sqr(AIGuardMachine::getStdGuardRange(getMachineOwner()));
+					m_exitConditions.m_conditionsToConsider = (ExitConditions::ATTACK_ExitIfOutsideRadius |
+																								ExitConditions::ATTACK_ExitIfNoUnitFound);
+
+					m_attackState = newInstance(AIAttackState)(getMachine(), false, true, false, &m_exitConditions);
+					m_attackState->getMachine()->setGoalObject(nemesis);
+
+					StateReturnType enterRet = m_attackState->onEnter();
+					if (enterRet == STATE_CONTINUE)
+						return STATE_CONTINUE;
+					return enterRet;
+				}
+			}
+		}
+
+		// No new target found, propagate the attack state's result (success/failure).
+		return ret;
 	}
 	else if (m_enterState)
 	{
@@ -644,9 +683,9 @@ StateReturnType AIGuardReturnState::onEnter()
 	UnsignedInt now = TheGameLogic->getFrame();
 	m_nextReturnScanTime = now + GameLogicRandomValue(0, TheAI->getAiData()->m_guardEnemyReturnScanRate);
 
-// no, no, no, don't do this in onEnter, unless you like really slow maps. (srj)
-//	if (getGuardMachine()->lookForInnerTarget())
-//		return STATE_FAILURE; // early termination because we found a target.
+	// no, no, no, don't do this in onEnter, unless you like really slow maps. (srj)
+	//	if (getGuardMachine()->lookForInnerTarget())
+	//		return STATE_FAILURE; // early termination because we found a target.
 
 	Object* targetToGuard = getGuardMachine()->findTargetToGuardByID();
 	m_goalPosition = targetToGuard ? *targetToGuard->getPosition() : *getGuardMachine()->getPositionToGuard();
@@ -656,6 +695,25 @@ StateReturnType AIGuardReturnState::onEnter()
 	{
 		area->getCenterPoint(&m_goalPosition);
 	}
+
+	// If we're already essentially at the guard position, do not issue a move command.
+	// This prevents deployed units from undeploying/redeploying when nothing else remains.
+	Object* owner = getMachineOwner();
+	if (owner && owner->getPosition())
+	{
+		Coord3D myPos = *owner->getPosition();
+		Coord3D delta;
+		delta.x = myPos.x - m_goalPosition.x;
+		delta.y = myPos.y - m_goalPosition.y;
+		delta.z = myPos.z - m_goalPosition.z;
+		Real closeSqr = sqr(CLOSE_ENOUGH);
+		if (delta.lengthSqr() <= closeSqr)
+		{
+			// Already close enough; don't move.
+			return STATE_SUCCESS;
+		}
+	}
+
 	AIUpdateInterface *ai = getMachineOwner()->getAIUpdateInterface();
 	if (ai && ai->isDoingGroundMovement())
 	{

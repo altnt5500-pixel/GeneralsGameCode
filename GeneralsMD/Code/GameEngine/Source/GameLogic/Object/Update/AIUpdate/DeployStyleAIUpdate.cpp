@@ -143,7 +143,22 @@ UpdateSleepTime DeployStyleAIUpdate::update()
 		}
 	}
 
-	if( isInRange || isInGuardIdleState )
+	if (m_state == DEPLOY && isTryingToAttack && !isInRange)
+	{
+		if (m_frameToWaitForDeploy != 0)
+		{
+			// Reverse the deploy at its current frame so we don't finish deploying fully.
+			setMyState(UNDEPLOY, TRUE);
+		}
+		else
+		{
+			// No pending deploy timer? Ensure we transition to undeploy state.
+			setMyState(UNDEPLOY);
+		}
+	}
+
+	//if( isInRange || isInGuardIdleState )
+	if ((isInRange && !ai->isMoving()) || isInGuardIdleState)
 	{
 		switch( m_state )
 		{
