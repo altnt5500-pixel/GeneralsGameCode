@@ -251,7 +251,8 @@ void DeployStyleAIUpdate::setManualLockedDeploy(Bool locked, const Coord3D* depl
 
 Bool DeployStyleAIUpdate::isManualLockedDeploy() const
 {
-	return m_manualLockedDeploy;
+	// TheSuperHackers @bugfix altnt5500-pixel 07/11/2026 Allow commands until manual redeployment completes.
+	return m_manualLockedDeploy && m_state == READY_TO_ATTACK;
 }
 
 static Bool isAttackCommandWithinWeaponRange(Object* object, const AICommandParms* parms)
@@ -316,7 +317,7 @@ void DeployStyleAIUpdate::aiDoCommand( const AICommandParms* parms )
 		}
 	}
 
-	if (m_manualLockedDeploy &&
+	if (isManualLockedDeploy() &&
 		parms &&
 		parms->m_cmdSource == CMD_FROM_PLAYER)
 	{

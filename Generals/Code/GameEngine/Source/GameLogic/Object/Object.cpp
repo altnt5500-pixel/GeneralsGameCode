@@ -134,7 +134,9 @@ static const ModelConditionFlags s_allWeaponFireFlags[] =
 		MODELCONDITION_RELOADING_C,
 		MODELCONDITION_PREATTACK_C,
 		MODELCONDITION_USING_WEAPON_C
-	)
+	),
+	ModelConditionFlags(),
+	ModelConditionFlags()
 };
 static_assert(ARRAY_SIZE(s_allWeaponFireFlags) == WEAPONSLOT_COUNT, "Incorrect array size");
 
