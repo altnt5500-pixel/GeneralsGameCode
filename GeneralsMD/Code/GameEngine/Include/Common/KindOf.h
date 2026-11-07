@@ -30,7 +30,6 @@
 #pragma once
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
-#include "Lib/BaseType.h"
 #include "Common/BitFlags.h"
 #include "Common/BitFlagsIO.h"
 
@@ -176,11 +175,15 @@ enum KindOfType CPP_11(: Int)
 	KINDOF_HEAVY_AIRCRAFT,
 	KINDOF_SPECIAL_AIRCRAFT,
 
+	// TheSuperHackers @info New kinds for Mods
+
+	KINDOF_NO_ATTACK_WARNING,				///< does not trigger the under attack radar/EVA warning when taking damage
+
 	KINDOF_COUNT,										// total number of kindofs
 	KINDOF_FIRST = 0,
 };
 
-typedef BitFlags<KINDOF_COUNT>	KindOfMaskType;
+typedef BitFlags<KINDOF_COUNT, struct KindOfMaskTypeTag>	KindOfMaskType;
 
 #define MAKE_KINDOF_MASK(k) KindOfMaskType(KindOfMaskType::kInit, (k))
 

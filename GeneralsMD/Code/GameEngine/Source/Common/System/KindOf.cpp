@@ -165,6 +165,7 @@ const char* const KindOfMaskType::s_bitNameList[] =
 	"HEAVY_ANTIAIR",
 	"HEAVY_AIRCRAFT",
 	"SPECIAL_AIRCRAFT",
+	"NO_ATTACK_WARNING",
 
 	nullptr
 };

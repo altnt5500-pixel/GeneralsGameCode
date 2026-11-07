@@ -72,9 +72,9 @@
 
 
 #include "collect.h"
-#include "chunkio.h"
+#include "WWLib/chunkio.h"
 #include "camera.h"
-#include "wwdebug.h"
+#include "WWDebug/wwdebug.h"
 #include "snapPts.h"
 #include "assetmgr.h"
 #include "ww3d.h"

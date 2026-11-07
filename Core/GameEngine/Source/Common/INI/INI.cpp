@@ -67,6 +67,7 @@
 
 #if USE_STD_FROM_CHARS_PARSING
 #include <charconv>
+#include <cstdlib>
 #include <string_view>
 #include <type_traits>
 #endif
@@ -235,7 +236,7 @@ INI::INI()
 }
 
 //-------------------------------------------------------------------------------------------------
-UnsignedInt INI::loadFileDirectory( AsciiString fileDirName, INILoadType loadType, Xfer *pXfer, Bool subdirs )
+UnsignedInt INI::loadFileDirectory( AsciiString fileDirName, INILoadType loadType, Xfer *pXfer, LoadFlags loadFlags )
 {
 	UnsignedInt filesRead = 0;
 	const UnsignedInt validationErrorCount = s_validationErrorCount;
@@ -261,7 +262,7 @@ UnsignedInt INI::loadFileDirectory( AsciiString fileDirName, INILoadType loadTyp
 	}
 
 	// Load any additional ini files from a "filename" directory and its subdirectories.
-	filesRead += loadDirectory(iniDir, loadType, pXfer, subdirs);
+	filesRead += loadDirectory(iniDir, loadType, pXfer, loadFlags & ~LoadFlags_ExpectFileFound);
 
 	// Expect to open and load at least one file.
 	if (filesRead == 0 && (s_validationErrorCallback == nullptr || s_validationErrorCount == validationErrorCount))
@@ -277,7 +278,7 @@ UnsignedInt INI::loadFileDirectory( AsciiString fileDirName, INILoadType loadTyp
 	* If we are to load subdirectories, we will load them *after* we load all the
 	* files in the current directory */
 //-------------------------------------------------------------------------------------------------
-UnsignedInt INI::loadDirectory( AsciiString dirName, INILoadType loadType, Xfer *pXfer, Bool subdirs )
+UnsignedInt INI::loadDirectory( AsciiString dirName, INILoadType loadType, Xfer *pXfer, LoadFlags loadFlags )
 {
 	UnsignedInt filesRead = 0;
 
@@ -285,6 +286,7 @@ UnsignedInt INI::loadDirectory( AsciiString dirName, INILoadType loadType, Xfer 
 	if( dirName.isEmpty() )
 		throw INI_INVALID_DIRECTORY;
 
+	const Bool subdirs = (loadFlags & LoadFlags_SearchSubDirs) != 0;
 	FilenameList filenameList;
 	dirName.concat('\\');
 	TheFileSystem->getFileListInDirectory(dirName, "*.ini", filenameList, subdirs);
@@ -296,7 +298,7 @@ UnsignedInt INI::loadDirectory( AsciiString dirName, INILoadType loadType, Xfer 
 		AsciiString tempname;
 		tempname = (*it).str() + dirName.getLength();
 
-		if ((tempname.find('\\') == nullptr) && (tempname.find('/') == nullptr)) {
+		if (getFirstPathSeparator(tempname.str()) == nullptr) {
 			// this file doesn't reside in a subdirectory, load it first.
 			filesRead += load( *it, loadType, pXfer );
 		}
@@ -309,10 +311,17 @@ UnsignedInt INI::loadDirectory( AsciiString dirName, INILoadType loadType, Xfer 
 		AsciiString tempname;
 		tempname = (*it).str() + dirName.getLength();
 
-		if ((tempname.find('\\') != nullptr) || (tempname.find('/') != nullptr)) {
+		if (getFirstPathSeparator(tempname.str()) != nullptr) {
 			filesRead += load( *it, loadType, pXfer );
 		}
 		++it;
+	}
+
+	// Expect to open and load at least one file.
+	const Bool expectFileFound = (loadFlags & LoadFlags_ExpectFileFound) != 0;
+	if (expectFileFound && filesRead == 0)
+	{
+		throw INI_CANT_OPEN_FILE;
 	}
 
 	return filesRead;
@@ -757,7 +766,7 @@ void INI::parseBool( INI* ini, void * /*instance*/, void *store, const void* /*u
 void INI::parseBitInInt32( INI *ini, void *instance, void *store, const void* userData )
 {
 	UnsignedInt* s = (UnsignedInt*)store;
-	UnsignedInt mask = (UnsignedInt)userData;
+	UnsignedInt mask = (UnsignedInt)(uintptr_t)userData;
 
 	if (INI::scanBool(ini->getNextToken()))
 		*s |= mask;
@@ -929,7 +938,8 @@ AsciiString INI::getNextAsciiString()
 				result.set(buff);
 			} else {
 				Int len = strlen(buff);
-				if (len && buff[len-1] == '"') { // strip off trailing quote jba. [2/12/2003]
+				if (len && buff[len-1] == '"') {
+					// strip off trailing quote jba. [2/12/2003]
 					buff[len-1] = 0;
 				}
 				result.set(buff);
@@ -1022,7 +1032,7 @@ void INI::parsePercentToReal( INI* ini, void * /*instance*/, void *store, const 
 //-------------------------------------------------------------------------------------------------
 void INI::parseBitString8( INI* ini, void * /*instance*/, void *store, const void* userData )
 {
-	UnsignedInt tmp;
+	UnsignedInt tmp = *(Byte*)store;
 	INI::parseBitString32(ini, nullptr, &tmp, userData);
 	if (tmp & 0xffffff00)
 	{
@@ -1279,23 +1289,22 @@ void INI::parseICoord2D( INI* ini, void * /*instance*/, void *store, const void*
 void INI::parseDynamicAudioEventRTS( INI *ini, void * /*instance*/, void *store, const void* userData )
 {
 	const char *token = ini->getNextToken();
-	DynamicAudioEventRTS** theSound = (DynamicAudioEventRTS**)store;
+	RefCountPtr<DynamicAudioEventRTS>* theSound = (RefCountPtr<DynamicAudioEventRTS>*)store;
 
 	// translate the string into a sound
 	if (stricmp(token, "NoSound") == 0)
 	{
-		deleteInstance(*theSound);
-		*theSound = nullptr;
+		theSound->Clear();
 	}
 	else
 	{
 		if (*theSound == nullptr)
-			*theSound = newInstance(DynamicAudioEventRTS);
-		(*theSound)->m_event.setEventName(AsciiString(token));
+			*theSound = Create_No_Add_Ref(newInstance(DynamicAudioEventRTS));
+		(*theSound)->setEventName(AsciiString(token));
 	}
 
 	if (*theSound)
-		TheAudio->getInfoForAudioEvent(&(*theSound)->m_event);
+		TheAudio->getInfoForAudioEvent(theSound->Peek());
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1714,20 +1723,38 @@ void INI::initFromINIMulti( void *what, const MultiIniFieldParse& parseTableList
 #if USE_STD_FROM_CHARS_PARSING
 
 template <typename Type>
-Type scanType(std::string_view token)
+Type scanType(const char* tokenString)
 {
+	std::string_view token(tokenString);
 	DEBUG_ASSERTCRASH(!token.empty(), ("token is not expected to be empty"));
 
 	// Unlike sscanf, std::from_chars cannot parse "+".
-	// Consume the plus symbol to accommodate custom ini files that have numbers prefixed with a plus.
-	if (token[0] == '+')
-	{
-		token.remove_prefix(1);
-	}
+	// Skip it for from_chars while preserving the original token for the fallback.
+	const size_t tokenOffset = (token[0] == '+');
+	if (tokenOffset && token.size() > 1 && token[1] == '-')
+		throw INI_INVALID_DATA;
 
 	// Unlike sscanf, std::from_chars cannot parse "-" as unsigned integer.
 	std::conditional_t<std::is_integral_v<Type>, Int64, Type> result{};
-	const auto [ptr, ec] = std::from_chars(token.data(), token.data() + token.size(), result);
+	const auto [ptr, ec] = std::from_chars(token.data() + tokenOffset, token.data() + token.size(), result);
+
+	// Preserve legacy range handling with defined strto* conversions.
+	if (ec == std::errc::result_out_of_range)
+	{
+		char* end;
+		Type value;
+		if constexpr (std::is_floating_point_v<Type>)
+			value = std::strtof(tokenString, &end);
+		else if constexpr (std::is_signed_v<Type>)
+			value = static_cast<Type>(std::strtoll(tokenString, &end, 10));
+		else
+			value = static_cast<Type>(std::strtoull(tokenString, &end, 10));
+
+		if (end == tokenString)
+			throw INI_INVALID_DATA;
+
+		return value;
+	}
 
 	if (ec != std::errc{})
 	{
@@ -1901,7 +1928,7 @@ void INI::parseDurationReal( INI *ini, void * /*instance*/, void *store, const v
 void INI::parseDurationUnsignedInt( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
 {
 	UnsignedInt val = scanUnsignedInt(ini->getNextToken());
-	*(UnsignedInt *)store = (UnsignedInt)ceilf(ConvertDurationFromMsecsToFrames((Real)val));
+	*(UnsignedInt *)store = (UnsignedInt)WWMath::Ceilf(ConvertDurationFromMsecsToFrames((Real)val));
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -1909,7 +1936,7 @@ void INI::parseDurationUnsignedInt( INI *ini, void * /*instance*/, void *store, 
 void INI::parseDurationUnsignedShort( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
 {
 	UnsignedInt val = scanUnsignedInt(ini->getNextToken());
-	*(UnsignedShort *)store = (UnsignedShort)ceilf(ConvertDurationFromMsecsToFrames((Real)val));
+	*(UnsignedShort *)store = (UnsignedShort)WWMath::Ceilf(ConvertDurationFromMsecsToFrames((Real)val));
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2001,13 +2028,13 @@ void INI::parseDamageTypeFlags(INI* ini, void* /*instance*/, void* store, const 
 		}
 		if (token[0] == '+')
 		{
-			DamageType dt = (DamageType)DamageTypeFlags::getSingleBitFromName(token+1);
+			DamageType dt = (DamageType)scanIndexList(token+1, DamageTypeFlags::getBitNames());
 			flags = setDamageTypeFlag(flags, dt);
 			continue;
 		}
 		if (token[0] == '-')
 		{
-			DamageType dt = (DamageType)DamageTypeFlags::getSingleBitFromName(token+1);
+			DamageType dt = (DamageType)scanIndexList(token+1, DamageTypeFlags::getBitNames());
 			flags = clearDamageTypeFlag(flags, dt);
 			continue;
 		}

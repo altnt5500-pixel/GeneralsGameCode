@@ -196,8 +196,8 @@ void dumpBattlePlanBonuses(const BattlePlanBonusesData *b, AsciiString name, con
 		kindofMaskAsAsciiString(b->m_invalidKindOf).str()));
 }
 #else
-#define DUMPBATTLEPLANBONUSES(x,y,z) {}
-#define CRCDUMPBATTLEPLANBONUSES(x,y,z) {}
+#define DUMPBATTLEPLANBONUSES(x,y,z)
+#define CRCDUMPBATTLEPLANBONUSES(x,y,z)
 #endif // DEBUG_CRC
 
 // ------------------------------------------------------------------------------------------------
@@ -409,6 +409,9 @@ void Player::init(const PlayerTemplate* pt)
 #if defined(RTS_DEBUG)
 	m_DEMO_ignorePrereqs = FALSE;
 	m_DEMO_freeBuild = FALSE;
+#endif
+
+#if defined(RTS_DEBUG) || defined(_ALLOW_DEBUG_CHEATS_IN_RELEASE)
 	m_DEMO_instantBuild = FALSE;
 #endif
 
@@ -1013,9 +1016,9 @@ void Player::becomingTeamMember(Object *obj, Bool yes)
 	}
 
 
-	if (obj->isKindOf(KINDOF_DOZER)
-			&& obj->getAIUpdateInterface()
-			&& obj->getAIUpdateInterface()->isIdle())
+	if (obj->isKindOf(KINDOF_DOZER) &&
+			obj->getAIUpdateInterface() &&
+			obj->getAIUpdateInterface()->isIdle())
 	{
 		// Need to remove it from the pick a peasant button
 		if (yes)
@@ -1160,11 +1163,11 @@ static void doFindCommandCenter(Object* obj, void* userData)
 {
 	PlayerObjectFindInfo* info = (PlayerObjectFindInfo*)userData;
 
-	if (info->obj == nullptr
-			&& obj->isKindOf(KINDOF_COMMANDCENTER)
-			&& obj->getTemplate()->getDefaultOwningSide() == info->player->getSide()
-			&& !obj->testStatus(OBJECT_STATUS_UNDER_CONSTRUCTION)
-			&& !obj->testStatus(OBJECT_STATUS_SOLD))
+	if (info->obj == nullptr &&
+			obj->isKindOf(KINDOF_COMMANDCENTER) &&
+			obj->getTemplate()->getDefaultOwningSide() == info->player->getSide() &&
+			!obj->testStatus(OBJECT_STATUS_UNDER_CONSTRUCTION) &&
+			!obj->testStatus(OBJECT_STATUS_SOLD))
 	{
 		info->obj = obj;
 	}
@@ -1183,9 +1186,9 @@ static void doFindSpecialPowerSourceObject( Object *obj, void *userData )
 		//We already found the best case scenario, so no need to iterate any more.
 		return;
 	}
-	if( !obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION )
-			&& !obj->testStatus( OBJECT_STATUS_SOLD )
-			&& !obj->isEffectivelyDead() )
+	if( !obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) &&
+			!obj->testStatus( OBJECT_STATUS_SOLD ) &&
+			!obj->isEffectivelyDead() )
 	{
 		if( info->spType == SPECIAL_INVALID && obj->hasAnySpecialPower() )
 		{
@@ -1245,9 +1248,9 @@ static void doCountSpecialPowersReady( Object *obj, void *userData )
 {
 	PlayerObjectFindInfo* info = (PlayerObjectFindInfo*)userData;
 
-	if( !obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION )
-			&& !obj->testStatus( OBJECT_STATUS_SOLD )
-			&& !obj->isEffectivelyDead() )
+	if( !obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) &&
+			!obj->testStatus( OBJECT_STATUS_SOLD ) &&
+			!obj->isEffectivelyDead() )
 	{
 		if( obj->hasSpecialPower( info->spType ) )
 		{
@@ -1298,9 +1301,9 @@ static void doFindMostReadyWeaponForThing( Object *obj, void *userData )
 
 	if( info->thing && info->thing->isEquivalentTo( obj->getTemplate() ) )
 	{
-		if( !obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION )
-				&& !obj->testStatus( OBJECT_STATUS_SOLD )
-				&& !obj->isEffectivelyDead() )
+		if( !obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) &&
+				!obj->testStatus( OBJECT_STATUS_SOLD ) &&
+				!obj->isEffectivelyDead() )
 		{
 			if( obj->hasAnyWeapon() )
 			{
@@ -1330,9 +1333,9 @@ static void doFindMostReadySpecialPowerForThing( Object *obj, void *userData )
 
 	if( info->thing && info->thing->isEquivalentTo( obj->getTemplate() ) )
 	{
-		if( !obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION )
-				&& !obj->testStatus( OBJECT_STATUS_SOLD )
-				&& !obj->isEffectivelyDead() )
+		if( !obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) &&
+				!obj->testStatus( OBJECT_STATUS_SOLD ) &&
+				!obj->isEffectivelyDead() )
 		{
 			// search the modules for the one with the matching template
 			for( BehaviorModule** m = obj->getBehaviorModules(); *m; ++m )
@@ -1366,9 +1369,9 @@ static void doFindExistingObjectWithThingTemplate( Object *obj, void *userData )
 
 	if( info->thing && info->thing->isEquivalentTo( obj->getTemplate() ) )
 	{
-		if( !obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION )
-				&& !obj->testStatus( OBJECT_STATUS_SOLD )
-				&& !obj->isEffectivelyDead() )
+		if( !obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) &&
+				!obj->testStatus( OBJECT_STATUS_SOLD ) &&
+				!obj->isEffectivelyDead() )
 		{
 			//We found one.
 			info->obj = obj;
@@ -2055,9 +2058,9 @@ void Player::transferAssetsFromThat(Player *that)
 	{
 		const UpgradeTemplate* upgradeTemplate = upgrade->getTemplate();
 
-		if (upgrade->getStatus() == UPGRADE_STATUS_IN_PRODUCTION
-			&& upgradeTemplate->getUpgradeType() == UPGRADE_TYPE_PLAYER
-			&& (hasUpgradeComplete(upgradeTemplate) || hasUpgradeInProduction(upgradeTemplate)))
+		if (upgrade->getStatus() == UPGRADE_STATUS_IN_PRODUCTION &&
+			upgradeTemplate->getUpgradeType() == UPGRADE_TYPE_PLAYER &&
+			(hasUpgradeComplete(upgradeTemplate) || hasUpgradeInProduction(upgradeTemplate)))
 		{
 			upgradesToCancel.push_back(upgradeTemplate);
 		}
@@ -2367,7 +2370,7 @@ void Player::doBountyForKill(const Object* killer, const Object* victim)
 	Int bounty = REAL_TO_INT_CEIL(costToBuild * m_cashBountyPercent);
 #else
 	// TheSuperHackers @bugfix Stubbjax 20/02/2026 Subtract epsilon to ensure bounty is rounded up correctly.
-	Int bounty = ceil((costToBuild * m_cashBountyPercent) - WWMATH_EPSILON);
+	Int bounty = WWMath::Ceil((costToBuild * m_cashBountyPercent) - WWMATH_EPSILON);
 #endif
 
 	if( bounty )
@@ -2759,6 +2762,76 @@ ScienceAvailabilityType Player::getScienceAvailabilityTypeFromString( const Asci
 	return SCIENCE_AVAILABILITY_INVALID;
 }
 
+namespace
+{
+  // ------------------------------------------------------------------------------------------------
+  // For countExisting
+  struct TypeCountData
+  {
+    UnsignedInt count;
+    const ThingTemplate *type;
+    NameKeyType linkKey;
+    Bool        checkProductionInterface;
+  };
+}
+
+// ------------------------------------------------------------------------------------------------
+/** Count all the units of a given type that exist or are in any production queues for a player */
+// ------------------------------------------------------------------------------------------------
+static void countExisting( Object *obj, void *userData )
+{
+  // Don't care about dead objects
+  if ( obj->isEffectivelyDead() )
+    return;
+
+  TypeCountData *typeCountData = (TypeCountData *)userData;
+
+  // Compare templates
+  if ( ( typeCountData->type && typeCountData->type->isEquivalentTo( obj->getTemplate() ) ) ||
+       ( typeCountData->linkKey != NAMEKEY_INVALID && obj->getTemplate() != nullptr && typeCountData->linkKey == obj->getTemplate()->getMaxSimultaneousLinkKey() ) )
+  {
+    typeCountData->count++;
+  }
+
+  // Also consider objects that have a production update interface
+  if ( typeCountData->checkProductionInterface )
+  {
+    ProductionUpdateInterface *pui = ProductionUpdate::getProductionUpdateInterfaceFromObject( obj );
+    if( pui )
+    {
+      // add the count of this type that are in the queue
+      typeCountData->count += pui->countUnitTypeInQueue( typeCountData->type );
+    }
+  }
+}
+
+//=============================================================================
+// Make sure that building another of this unit/structure/object won't exceed MaxSimultaneousOfType()
+Bool Player::canBuildMoreOfType( const ThingTemplate *whatToBuild ) const
+{
+  // make sure we're not maxed out for this type of unit.
+  UnsignedInt maxSimultaneousOfType = whatToBuild->getMaxSimultaneousOfType();
+  if (maxSimultaneousOfType != 0)
+  {
+
+    TypeCountData typeCountData;
+    typeCountData.count = 0;
+    typeCountData.type = whatToBuild;
+    typeCountData.linkKey = whatToBuild->getMaxSimultaneousLinkKey();
+    // Assumption: Things with a KINDOF_STRUCTURE flag can never be built from
+    // a factory (ProductionUpdateInterface), because the building can't move
+    // out of the factory. When we do our Starcraft port and have flying Terran
+    // buildings, we'll have to change this ;-)
+    // Remember: To ASSUME makes an ASS out of U and ME.
+    typeCountData.checkProductionInterface = !whatToBuild->isKindOf( KINDOF_STRUCTURE );
+
+    iterateObjects( countExisting, &typeCountData );
+    if( typeCountData.count >= maxSimultaneousOfType )
+      return false;
+  }
+  return true;
+}
+
 //=============================================================================
 Bool Player::canBuild(const ThingTemplate *tmplate) const
 {
@@ -2987,11 +3060,11 @@ void Player::removeUpgrade( const UpgradeTemplate *upgradeTemplate )
 Bool Player::okToPlayRadarEdgeSound()
 {
 	return (
-		! TheVictoryConditions->hasSinglePlayerBeenDefeated( this )
-		&& ! m_isPlayerDead
-		&& ! TheInGameUI->isClientQuiet()
-		&& TheGameLogic->isInGameLogicUpdate()
-		&& TheGameLogic->getFrame() > 0 );
+		! TheVictoryConditions->hasSinglePlayerBeenDefeated( this ) &&
+		! m_isPlayerDead &&
+		! TheInGameUI->isClientQuiet() &&
+		TheGameLogic->isInGameLogicUpdate() &&
+		TheGameLogic->getFrame() > 0 );
 
 }
 
@@ -3046,8 +3119,8 @@ void Player::disableRadar()
 	Bool hadRadar = hasRadar();
 	m_radarDisabled = TRUE;
 
-	if( hadRadar
-		&& !hasRadar() && okToPlayRadarEdgeSound() )
+	if( hadRadar &&
+		!hasRadar() && okToPlayRadarEdgeSound() )
 	{
 		// This player just lost radar, so play the "You lost Radar!" sound
 		AudioEventRTS soundToPlay = TheAudio->getMiscAudio()->m_radarOfflineSound;
@@ -3541,7 +3614,7 @@ void Player::processSelectTeamGameMessage(Int hotkeyNum) {
 
 	m_currentSelection->clearSquad();
 
-	VecObjectPtr objectList = m_squads[hotkeyNum]->getLiveObjects();
+	const VecObjectPtr& objectList = m_squads[hotkeyNum]->getLiveObjects();
 	Int numObjs = objectList.size();
 
 	for (Int i = 0; i < numObjs; ++i) {
@@ -3566,7 +3639,7 @@ void Player::processAddTeamGameMessage(Int hotkeyNum) {
 		m_currentSelection = newInstance( Squad );
 	}
 
-	VecObjectPtr objectList = m_squads[hotkeyNum]->getLiveObjects();
+	const VecObjectPtr& objectList = m_squads[hotkeyNum]->getLiveObjects();
 	Int numObjs = objectList.size();
 
 	for (Int i = 0; i < numObjs; ++i) {
