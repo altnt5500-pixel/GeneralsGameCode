@@ -76,6 +76,10 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 static Xfer *s_xfer = nullptr;
+static INI::INIValidationErrorCallback s_validationErrorCallback = nullptr;
+static INI::INIValidationWarningCallback s_validationWarningCallback = nullptr;
+static FilenameList s_validationLoadedFiles;
+static UnsignedInt s_validationErrorCount = 0;
 
 //-------------------------------------------------------------------------------------------------
 /** This is the table of data types we can have in INI files.  To add a new data type
@@ -165,6 +169,48 @@ Bool INI::isValidINIFilename( const char *filename )
 	return endsWithNoCase(filename, ".ini");
 }
 
+void INI::setValidationErrorCallback(INIValidationErrorCallback callback)
+{
+	s_validationErrorCallback = callback;
+	s_validationLoadedFiles.clear();
+	s_validationErrorCount = 0;
+}
+
+void INI::setValidationWarningCallback(INIValidationWarningCallback callback)
+{
+	s_validationWarningCallback = callback;
+}
+
+void INI::clearValidationState()
+{
+	s_validationErrorCallback = nullptr;
+	s_validationWarningCallback = nullptr;
+	s_validationLoadedFiles.clear();
+	s_validationErrorCount = 0;
+}
+
+Bool INI::isValidationEnabled()
+{
+	return s_validationErrorCallback != nullptr || s_validationWarningCallback != nullptr;
+}
+
+Bool INI::reportValidationWarning(const INI *ini, const char *message)
+{
+	if (s_validationWarningCallback == nullptr)
+	{
+		return FALSE;
+	}
+
+	s_validationWarningCallback(ini != nullptr ? ini->getFilename().str() : "Unknown",
+		ini != nullptr ? ini->getLineNum() : 0, message);
+	return TRUE;
+}
+
+Bool INI::wasFileLoadedForValidation(const AsciiString& filename)
+{
+	return s_validationLoadedFiles.find(filename) != s_validationLoadedFiles.end();
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // PUBLIC FUNCTIONS ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -192,6 +238,7 @@ INI::INI()
 UnsignedInt INI::loadFileDirectory( AsciiString fileDirName, INILoadType loadType, Xfer *pXfer, Bool subdirs )
 {
 	UnsignedInt filesRead = 0;
+	const UnsignedInt validationErrorCount = s_validationErrorCount;
 
 	AsciiString iniDir = fileDirName;
 	AsciiString iniFile = fileDirName;
@@ -217,7 +264,7 @@ UnsignedInt INI::loadFileDirectory( AsciiString fileDirName, INILoadType loadTyp
 	filesRead += loadDirectory(iniDir, loadType, pXfer, subdirs);
 
 	// Expect to open and load at least one file.
-	if (filesRead == 0)
+	if (filesRead == 0 && (s_validationErrorCallback == nullptr || s_validationErrorCount == validationErrorCount))
 	{
 		throw INI_CANT_OPEN_FILE;
 	}
@@ -368,9 +415,26 @@ static INIFieldParseProc findFieldParse(const FieldParse* parseTable, const char
 UnsignedInt INI::load( AsciiString filename, INILoadType loadType, Xfer *pXfer )
 {
 	setFPMode(); // so we have consistent Real values for GameLogic -MDC
+	if (s_validationErrorCallback != nullptr)
+	{
+		s_validationLoadedFiles.insert(filename);
+	}
 
 	s_xfer = pXfer;
-	prepFile(filename, loadType);
+	try
+	{
+		prepFile(filename, loadType);
+	}
+	catch (...)
+	{
+		if (s_validationErrorCallback != nullptr)
+		{
+			++s_validationErrorCount;
+			s_validationErrorCallback(filename.str(), 0, "Could not open INI file");
+			return 0;
+		}
+		throw;
+	}
 
 	try
 	{
@@ -399,10 +463,23 @@ UnsignedInt INI::load( AsciiString filename, INILoadType loadType, Xfer *pXfer )
 						(*parse)( this );
 
 					} catch (...) {
-						DEBUG_CRASH(("Error parsing block '%s' in INI file '%s'", token, m_filename.str()) );
+						if (s_validationErrorCallback == nullptr)
+						{
+							DEBUG_CRASH(("Error parsing block '%s' in INI file '%s'", token, m_filename.str()) );
+						}
 						char buff[1024];
 						snprintf(buff, ARRAY_SIZE(buff), "Error parsing INI file '%s' (Line: '%s')\n",
 							m_filename.str(), currentLine.str());
+						if (s_validationErrorCallback != nullptr)
+						{
+							++s_validationErrorCount;
+							s_validationErrorCallback(m_filename.str(), m_lineNum, buff);
+							while (!m_endOfFile && !isEndOfBlock(m_buffer))
+							{
+								readLine();
+							}
+							continue;
+						}
 
 						throw INIException(buff);
 					}
@@ -412,8 +489,21 @@ UnsignedInt INI::load( AsciiString filename, INILoadType loadType, Xfer *pXfer )
 				}
 				else
 				{
-					DEBUG_CRASH( ("[LINE: %d - FILE: '%s'] Unknown block '%s'",
-														 getLineNum(), getFilename().str(), token ) );
+					if (s_validationErrorCallback == nullptr)
+					{
+						DEBUG_CRASH( ("[LINE: %d - FILE: '%s'] Unknown block '%s'",
+															 getLineNum(), getFilename().str(), token ) );
+					}
+					if (s_validationErrorCallback != nullptr)
+					{
+						++s_validationErrorCount;
+						s_validationErrorCallback(m_filename.str(), m_lineNum, "Unknown INI block");
+						while (!m_endOfFile && !isEndOfBlock(m_buffer))
+						{
+							readLine();
+						}
+						continue;
+					}
 					throw INI_UNKNOWN_TOKEN;
 				}
 
@@ -421,9 +511,31 @@ UnsignedInt INI::load( AsciiString filename, INILoadType loadType, Xfer *pXfer )
 
 		}
 	}
+	catch (INIException& exception)
+	{
+		AsciiString failedFilename = m_filename;
+		UnsignedInt failedLine = m_lineNum;
+		unPrepFile();
+		if (s_validationErrorCallback != nullptr)
+		{
+			++s_validationErrorCount;
+			s_validationErrorCallback(failedFilename.str(), failedLine,
+				exception.mFailureMessage != nullptr ? exception.mFailureMessage : "INI parse error");
+			return 0;
+		}
+		throw;
+	}
 	catch (...)
 	{
+		AsciiString failedFilename = m_filename;
+		UnsignedInt failedLine = m_lineNum;
 		unPrepFile();
+		if (s_validationErrorCallback != nullptr)
+		{
+			++s_validationErrorCount;
+			s_validationErrorCallback(failedFilename.str(), failedLine, "Invalid INI data");
+			return 0;
+		}
 
 		// propagate the exception.
 		throw;
@@ -2003,7 +2115,7 @@ Bool INI::isEndOfBlock( char *bufferToCheck )
 		++tempBuff;
 	}
 
-	if (strlen(tempBuff) > endStringLength) {
+	if (strlen(tempBuff) >= endStringLength) {
 		restoreChar = tempBuff[endStringLength];
 		tempBuff[endStringLength] = 0;
 

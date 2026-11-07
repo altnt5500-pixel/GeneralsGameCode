@@ -175,6 +175,7 @@ public:
 	void setUpgradeNameKey( NameKeyType key ) { m_nameKey = key; }
 	NameKeyType getUpgradeNameKey() const { return m_nameKey; }
 	const AsciiString& getDisplayNameLabel() const { return m_displayNameLabel; }
+	const std::vector<AsciiString>& getSciencesToGrant() const { return m_sciencesToGrant; }
 	const UpgradeMaskType& getUpgradeMask() const { return m_upgradeMask; }
 	UpgradeType getUpgradeType() const { return m_type; }
 	const AudioEventRTS* getResearchCompleteSound() const { return &m_researchSound; }
@@ -204,6 +205,7 @@ protected:
 	AsciiString m_name;									///< upgrade name
 	NameKeyType m_nameKey;							///< name key
 	AsciiString m_displayNameLabel;			///< String manager label for UI display name
+	std::vector<AsciiString> m_sciencesToGrant;	///< sciences granted by this upgrade
 	Real m_buildTime;										///< database # for how long it takes to "build" this
 	Int m_cost;													///< cost for production
 	UpgradeMaskType m_upgradeMask;			///< Unique bitmask for this upgrade template

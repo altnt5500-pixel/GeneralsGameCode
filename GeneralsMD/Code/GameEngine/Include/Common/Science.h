@@ -58,8 +58,9 @@ private:
 	UnicodeString					m_description;
 	ScienceVec						m_rootSciences;			// this is calced at runtime, NOT read from INI
 	ScienceVec						m_prereqSciences;
-	Int										m_sciencePurchasePointCost;
-	Bool									m_grantable;
+	std::vector<AsciiString>		m_upgradesToGrant;
+	Int									m_sciencePurchasePointCost;
+	Bool								m_grantable;
 
 	ScienceInfo() :
 		m_science(SCIENCE_INVALID),
@@ -102,6 +103,7 @@ public:
 	Bool playerHasRootPrereqsForScience(const Player* player, ScienceType st) const;
 
 	Int getSciencePurchaseCost(ScienceType science) const;
+	const std::vector<AsciiString>& getUpgradesToGrant(ScienceType science) const;
 
 	ScienceType getScienceFromInternalName(const AsciiString& name) const;
 	AsciiString getInternalNameForScience(ScienceType science) const;

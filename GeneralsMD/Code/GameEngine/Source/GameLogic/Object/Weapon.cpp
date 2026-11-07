@@ -2553,7 +2553,7 @@ Real Weapon::estimateWeaponDamage(const Object *sourceObj, const Object *victimO
 //-------------------------------------------------------------------------------------------------
 void Weapon::newProjectileFired(const Object *sourceObj, const Object *projectile, const Object *victimObj, const Coord3D *victimPos )
 {
-	// If I have a stream, I need to tell it about this new guy
+		// If I have a stream, I need to tell it about this new guy
 	if( m_template->getProjectileStreamName().isEmpty() )
 		return; // nope, no streak logic to do
 
@@ -2637,6 +2637,8 @@ Bool Weapon::privateFireWeapon(
 		*projectileID = INVALID_ID;
 
 	if (!m_template)
+		return false;
+	if (!sourceObj->canFireWeapon(this))
 		return false;
 
 	// If we are a networked weapon, tell everyone nearby they might want to get in on this shot

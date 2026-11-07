@@ -44,6 +44,7 @@ FireWeaponUpdateModuleData::FireWeaponUpdateModuleData()
 	m_weaponTemplate = nullptr;
   m_initialDelayFrames = 0;
 	m_exclusiveWeaponDelay = 0;
+	m_fireCondition = FIRE_WEAPON_UPDATE_CONDITION_NONE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -56,9 +57,21 @@ FireWeaponUpdateModuleData::FireWeaponUpdateModuleData()
 		{ "Weapon",								INI::parseWeaponTemplate,	      nullptr, offsetof( FireWeaponUpdateModuleData, m_weaponTemplate ) },
 		{ "InitialDelay",					INI::parseDurationUnsignedInt,	nullptr, offsetof( FireWeaponUpdateModuleData, m_initialDelayFrames ) },
 		{ "ExclusiveWeaponDelay",	INI::parseDurationUnsignedInt,	nullptr, offsetof( FireWeaponUpdateModuleData, m_exclusiveWeaponDelay ) },
+		{ "FireConditions", FireWeaponUpdateModuleData::parseFireCondition, nullptr, 0 },
 		{ nullptr, nullptr, nullptr, 0 }
 	};
   p.add(dataFieldParse);
+}
+
+//-------------------------------------------------------------------------------------------------
+void FireWeaponUpdateModuleData::parseFireCondition(INI* ini, void* instance, void*, const void*)
+{
+	static const char *const conditionNames[] = { "NONE", "DEPLOYED", nullptr };
+	const Int condition = INI::scanIndexList(ini->getNextToken(), conditionNames);
+	if (condition < FIRE_WEAPON_UPDATE_CONDITION_NONE || condition > FIRE_WEAPON_UPDATE_CONDITION_DEPLOYED)
+		throw INI_INVALID_DATA;
+
+	static_cast<FireWeaponUpdateModuleData*>(instance)->m_fireCondition = (FireWeaponUpdateConditionType)condition;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -119,6 +132,10 @@ Bool FireWeaponUpdate::isOkayToFire()
 
 	if( me->testStatus(OBJECT_STATUS_UNDER_CONSTRUCTION) )
 		return FALSE; // no hitting with a 0% building, cheater
+
+	if (data->m_fireCondition == FIRE_WEAPON_UPDATE_CONDITION_DEPLOYED &&
+		!me->testStatus(OBJECT_STATUS_DEPLOYED))
+		return FALSE;
 
 	// Firing a real weapon suppresses this module
 	if( data->m_exclusiveWeaponDelay > 0  &&  ( TheGameLogic->getFrame() < (me->getLastShotFiredFrame() + data->m_exclusiveWeaponDelay) ) )

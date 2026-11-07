@@ -56,11 +56,46 @@ DeployStyleAIUpdate::DeployStyleAIUpdate( Thing *thing, const ModuleData* module
 {
 	m_state = READY_TO_MOVE;
 	m_frameToWaitForDeploy = 0;
+	m_manualLockedDeploy = FALSE;
+	m_hasManualDeployPos = FALSE;
+	m_pendingManualUndeploy = FALSE;
+	m_pendingManualDeployLock = FALSE;
+	m_hasSavedRanges = FALSE;
+	m_originalVisionRange = 0.0f;
+	m_originalShroudClearingRange = 0.0f;
 }
 
 //-------------------------------------------------------------------------------------------------
 DeployStyleAIUpdate::~DeployStyleAIUpdate()
 {
+}
+
+static void fireDeployTransitionWeapon(Object* object, const WeaponTemplate* weaponTemplate)
+{
+	if (weaponTemplate == nullptr)
+		return;
+
+	Coord3D targetPosition = *object->getPosition();
+	AIUpdateInterface* ai = object->getAIUpdateInterface();
+	if (ai != nullptr)
+	{
+		Object* target = ai->getCurrentVictim();
+		if (target != nullptr)
+		{
+			targetPosition = *target->getPosition();
+		}
+		else
+		{
+			const Coord3D* currentVictimPosition = ai->getCurrentVictimPos();
+			if (currentVictimPosition != nullptr)
+				targetPosition = *currentVictimPosition;
+		}
+	}
+
+	Weapon* weapon = TheWeaponStore->allocateNewWeapon(weaponTemplate, PRIMARY_WEAPON);
+	weapon->loadAmmoNow(object);
+	weapon->forceFireWeapon(object, &targetPosition);
+	deleteInstance(weapon);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -69,11 +104,240 @@ Bool DeployStyleAIUpdate::isIdle() const
 	return AIUpdateInterface::isIdle();
 }
 
+void DeployStyleAIUpdate::setManualLockedDeploy(Bool locked, const Coord3D* deployPos)
+{
+	AIUpdateInterface* ai = getObject()->getAI();
+
+	if (locked)
+	{
+		if (deployPos != nullptr)
+		{
+			m_manualDeployPos = *deployPos;
+			m_hasManualDeployPos = TRUE;
+
+			if (ai != nullptr)
+			{
+				m_manualLockedDeploy = FALSE;
+
+				ai->aiMoveToPosition(&m_manualDeployPos, CMD_FROM_PLAYER);
+
+				m_pendingManualDeployLock = TRUE;
+
+				const ThingTemplate* templ = getObject()->getTemplate();
+				if (templ)
+				{
+					const AudioEventRTS* v = templ->getVoiceDeploy();
+					if (v && !v->getEventName().isEmpty())
+					{
+						AudioEventRTS voice = *v;
+						voice.setObjectID(getObject()->getID());
+						TheAudio->addAudioEvent(&voice);
+					}
+				}
+			}
+			else
+			{
+				m_manualLockedDeploy = TRUE;
+			}
+		}
+		else
+		{
+			m_hasManualDeployPos = FALSE;
+
+			if (ai != nullptr)
+			{
+				AICommandParms stopCmd(AICMD_IDLE, CMD_FROM_PLAYER);
+				ai->aiDoCommand(&stopCmd);
+			}
+
+			m_manualLockedDeploy = TRUE;
+
+			{
+				const ThingTemplate* templ = getObject()->getTemplate();
+				if (templ)
+				{
+					const AudioEventRTS* v = templ->getVoiceDeploy();
+					if (v && !v->getEventName().isEmpty())
+					{
+						AudioEventRTS voice = *v;
+						voice.setObjectID(getObject()->getID());
+						TheAudio->addAudioEvent(&voice);
+					}
+				}
+			}
+
+			switch (m_state)
+			{
+			case READY_TO_ATTACK:
+				break;
+
+			case UNDEPLOY:
+				if (m_frameToWaitForDeploy != 0)
+				{
+					setMyState(DEPLOY, TRUE);
+				}
+				else
+				{
+					setMyState(DEPLOY);
+				}
+				break;
+
+			case READY_TO_MOVE:
+				setMyState(DEPLOY);
+				break;
+
+			case DEPLOY:
+				break;
+
+			case ALIGNING_TURRETS:
+				break;
+			}
+		}
+	}
+	else
+	{
+		m_manualLockedDeploy = FALSE;
+		m_hasManualDeployPos = FALSE;
+
+		{
+			const ThingTemplate* templ = getObject()->getTemplate();
+			if (templ)
+			{
+				const AudioEventRTS* v = templ->getVoiceUnDeploy();
+				if (v && !v->getEventName().isEmpty())
+				{
+					AudioEventRTS voice = *v;
+					voice.setObjectID(getObject()->getID());
+					TheAudio->addAudioEvent(&voice);
+				}
+			}
+		}
+
+		if (m_state == DEPLOY)
+		{
+			if (m_frameToWaitForDeploy != 0)
+			{
+				setMyState(UNDEPLOY, TRUE);
+			}
+			else
+			{
+				setMyState(UNDEPLOY);
+			}
+		}
+		else if (m_state == READY_TO_ATTACK)
+		{
+			WhichTurretType tur = getWhichTurretForCurWeapon();
+
+			if (tur != TURRET_INVALID &&
+				doTurretsHaveToCenterBeforePacking())
+			{
+				m_pendingManualUndeploy = TRUE;
+				setMyState(ALIGNING_TURRETS);
+			}
+			else
+			{
+				setMyState(UNDEPLOY);
+			}
+		}
+
+		if (ai != nullptr)
+		{
+			ai->setCurrentVictim(nullptr);
+			AICommandParms stopCmd(AICMD_IDLE, CMD_FROM_PLAYER);
+			ai->aiDoCommand(&stopCmd);
+		}
+	}
+}
+
+Bool DeployStyleAIUpdate::isManualLockedDeploy() const
+{
+	return m_manualLockedDeploy;
+}
+
+static Bool isAttackCommandWithinWeaponRange(Object* object, const AICommandParms* parms)
+{
+	if (object == nullptr || parms == nullptr)
+		return FALSE;
+
+	Weapon* weapon = object->getCurrentWeapon();
+	if (weapon == nullptr)
+		return FALSE;
+
+	switch (parms->m_cmd)
+	{
+	case AICMD_ATTACK_POSITION:
+		return weapon->isWithinAttackRange(object, &parms->m_pos);
+
+	case AICMD_ATTACK_OBJECT:
+	case AICMD_FORCE_ATTACK_OBJECT:
+		return parms->m_obj != nullptr && weapon->isWithinAttackRange(object, parms->m_obj);
+
+	default:
+		return FALSE;
+	}
+}
+
 //-------------------------------------------------------------------------------------------------
 void DeployStyleAIUpdate::aiDoCommand( const AICommandParms* parms )
 {
+	//if (!isAllowedToRespondToAiCommands(parms))
+	//	return;
 	if (!isAllowedToRespondToAiCommands(parms))
 		return;
+
+	if (parms &&
+		parms->m_cmdSource == CMD_FROM_PLAYER &&
+		m_pendingManualDeployLock && !m_manualLockedDeploy)
+	{
+		m_manualLockedDeploy = FALSE;
+		m_hasManualDeployPos = FALSE;
+		m_pendingManualUndeploy = FALSE;
+		m_pendingManualDeployLock = FALSE;
+	}
+
+	const ThingTemplate* objectTemplate = getObject()->getTemplate();
+	if (parms &&
+		parms->m_cmdSource == CMD_FROM_PLAYER &&
+		!m_manualLockedDeploy &&
+		objectTemplate != nullptr &&
+		objectTemplate->preferManualDeployLogic() &&
+		(parms->m_cmd == AICMD_ATTACK_POSITION ||
+			parms->m_cmd == AICMD_ATTACK_OBJECT ||
+			parms->m_cmd == AICMD_FORCE_ATTACK_OBJECT))
+	{
+		if (isAttackCommandWithinWeaponRange(getObject(), parms))
+		{
+			setManualLockedDeploy(TRUE, nullptr);
+		}
+		else
+		{
+			m_hasManualDeployPos = FALSE;
+			m_pendingManualDeployLock = TRUE;
+		}
+	}
+
+	if (m_manualLockedDeploy &&
+		parms &&
+		parms->m_cmdSource == CMD_FROM_PLAYER)
+	{
+		if (parms->m_cmd == AICMD_IDLE)
+		{
+			if (m_state != READY_TO_ATTACK)
+				return;
+
+			privateIdle(parms->m_cmdSource);
+			setCurrentVictim(nullptr);
+			return;
+		}
+
+		if (parms->m_cmd != AICMD_ATTACK_POSITION &&
+			parms->m_cmd != AICMD_ATTACK_OBJECT &&
+			parms->m_cmd != AICMD_FORCE_ATTACK_OBJECT)
+			return;
+
+		if (m_state == READY_TO_ATTACK && !isAttackCommandWithinWeaponRange(getObject(), parms))
+			return;
+	}
 
 	/*
 	//Hack code to allow follow waypoint scripts to be converted to attack follow waypoint scripts
@@ -113,6 +377,17 @@ UpdateSleepTime DeployStyleAIUpdate::update()
 
 	AIUpdateInterface *ai = self->getAI();
 
+	if (m_state == ALIGNING_TURRETS && m_pendingManualUndeploy)
+	{
+		WhichTurretType tur = getWhichTurretForCurWeapon();
+
+		if (tur == TURRET_INVALID || isTurretInNaturalPosition(tur))
+		{
+			m_pendingManualUndeploy = FALSE;
+			setMyState(UNDEPLOY);
+		}
+	}
+
 	if( isTryingToAttack && weapon )
 	{
 		Object *victim = ai->getCurrentVictim();
@@ -143,18 +418,61 @@ UpdateSleepTime DeployStyleAIUpdate::update()
 		}
 	}
 
+	if (m_state == READY_TO_ATTACK)
+	{
+		if (ai &&
+				ai->getCurrentVictim() == nullptr &&
+				!isTryingToAttack)
+		{
+			if (m_manualLockedDeploy || m_hasManualDeployPos)
+			{
+				{
+					Object* newVictim = getNextMoodTarget(TRUE, FALSE);
+					if (newVictim)
+					{
+						if (weapon == nullptr || weapon->isWithinAttackRange(self, newVictim))
+						{
+							privateAttackObject(newVictim, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI);
+						}
+						else
+						{
+						}
+					}
+				}
+			}
+		}
+	}
+
+#if !RETAIL_COMPATIBLE_CRC
 	if (m_state == DEPLOY && isTryingToAttack && !isInRange)
 	{
 		if (m_frameToWaitForDeploy != 0)
 		{
-			// Reverse the deploy at its current frame so we don't finish deploying fully.
 			setMyState(UNDEPLOY, TRUE);
 		}
 		else
 		{
-			// No pending deploy timer? Ensure we transition to undeploy state.
-			setMyState(UNDEPLOY);
+			if (!m_manualLockedDeploy)
+			{
+				setMyState(UNDEPLOY);
+			}
 		}
+	}
+#endif
+
+	Bool isReadyForPendingManualDeploy =
+		(m_state == READY_TO_MOVE && (m_hasManualDeployPos || (isTryingToAttack && isInRange))) ||
+		(m_state == READY_TO_ATTACK && isTryingToAttack && isInRange);
+	if (m_pendingManualDeployLock &&
+		isReadyForPendingManualDeploy &&
+		!ai->isMoving())
+	{
+		m_pendingManualDeployLock = FALSE;
+		m_manualLockedDeploy = TRUE;
+
+		if (m_state == READY_TO_MOVE)
+			setMyState(DEPLOY);
+		m_hasManualDeployPos = FALSE;
 	}
 
 	//if( isInRange || isInGuardIdleState )
@@ -289,8 +607,18 @@ UpdateSleepTime DeployStyleAIUpdate::update()
 //-------------------------------------------------------------------------------------------------
 void DeployStyleAIUpdate::setMyState( DeployStateTypes stateID, Bool reverseDeploy )
 {
-	m_state = stateID;
+	const DeployStateTypes previousState = m_state;
 	Object *self = getObject();
+	const ThingTemplate *thing = self->getTemplate();
+	if (stateID == DEPLOY && !m_hasSavedRanges &&
+		(thing->getDeployedVisionRange() >= 0.0f || thing->getDeployedShroudClearingRange() >= 0.0f))
+	{
+		m_originalVisionRange = self->getVisionRange();
+		m_originalShroudClearingRange = self->getShroudClearingRange();
+		m_hasSavedRanges = TRUE;
+	}
+
+	m_state = stateID;
 	UnsignedInt now = TheGameLogic->getFrame();
 	const DeployStyleAIUpdateModuleData *data = getDeployStyleAIUpdateModuleData();
 
@@ -323,7 +651,6 @@ void DeployStyleAIUpdate::setMyState( DeployStateTypes stateID, Bool reverseDepl
 			}
 
 			//Play deploy sound
-			const ThingTemplate *thing = self->getTemplate();
 			const AudioEventRTS* soundToPlayPtr = thing->getPerUnitSound( "Deploy" );
 			if( soundToPlayPtr )
 			{
@@ -336,6 +663,14 @@ void DeployStyleAIUpdate::setMyState( DeployStateTypes stateID, Bool reverseDepl
 		}
 		case UNDEPLOY:
 		{
+			if (m_hasSavedRanges)
+			{
+				if (thing->getDeployedVisionRange() >= 0.0f)
+					self->setVisionRange(m_originalVisionRange);
+				if (thing->getDeployedShroudClearingRange() >= 0.0f)
+					self->setShroudClearingRange(m_originalShroudClearingRange);
+			}
+
 			//This status will tell the approach AI state to succeed automatically. This prevents
 			//twitching on deploy. Make sure we clear it now so when it goes into that state, it'll
 			//actually move.
@@ -375,7 +710,6 @@ void DeployStyleAIUpdate::setMyState( DeployStateTypes stateID, Bool reverseDepl
 			}
 
 			//Play undeploy sound
-			const ThingTemplate *thing = self->getTemplate();
 			const AudioEventRTS* soundToPlayPtr = thing->getPerUnitSound( "Undeploy" );
 			if( soundToPlayPtr )
 			{
@@ -389,12 +723,21 @@ void DeployStyleAIUpdate::setMyState( DeployStateTypes stateID, Bool reverseDepl
 		case READY_TO_MOVE:
 		{
 			m_frameToWaitForDeploy = 0;
+			m_hasSavedRanges = FALSE;
 
 			self->clearModelConditionFlags( MAKE_MODELCONDITION_MASK( MODELCONDITION_PACKING ) );
 			break;
 		}
 		case READY_TO_ATTACK:
 		{
+			if (m_hasSavedRanges)
+			{
+				if (thing->getDeployedVisionRange() >= 0.0f)
+					self->setVisionRange(thing->getDeployedVisionRange());
+				if (thing->getDeployedShroudClearingRange() >= 0.0f)
+					self->setShroudClearingRange(thing->getDeployedShroudClearingRange());
+			}
+
 			//This status will tell the approach AI state to succeed automatically. This prevents
 			//twitching on deploy.
 			self->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_DEPLOYED ) );
@@ -427,6 +770,11 @@ void DeployStyleAIUpdate::setMyState( DeployStateTypes stateID, Bool reverseDepl
 		}
 	}
 
+	if (previousState == DEPLOY && stateID == READY_TO_ATTACK)
+		fireDeployTransitionWeapon(self, thing->getFireWeaponUponDeployed());
+	else if (previousState == UNDEPLOY && stateID == READY_TO_MOVE)
+		fireDeployTransitionWeapon(self, thing->getFireWeaponUponUndeploying());
+
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -444,12 +792,13 @@ void DeployStyleAIUpdate::crc( Xfer *xfer )
 	* 1: Initial version
 	* 2: Added support for attack move
 	* 3: Added improved support for guard, and support for hunt AI
+	* 5: Added saved original vision and shroud-clearing ranges
  **/
 // ------------------------------------------------------------------------------------------------
 void DeployStyleAIUpdate::xfer( Xfer *xfer )
 {
   // version
-  XferVersion currentVersion = 4;
+	XferVersion currentVersion = 5;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
 
@@ -460,6 +809,18 @@ void DeployStyleAIUpdate::xfer( Xfer *xfer )
 	{
 		xfer->xferUser(&m_state, sizeof(m_state));
 		xfer->xferUnsignedInt(&m_frameToWaitForDeploy);
+		if (version >= 5)
+		{
+			xfer->xferBool(&m_hasSavedRanges);
+			xfer->xferReal(&m_originalVisionRange);
+			xfer->xferReal(&m_originalShroudClearingRange);
+		}
+		else if (xfer->getXferMode() == XFER_LOAD)
+		{
+			m_hasSavedRanges = FALSE;
+			m_originalVisionRange = 0.0f;
+			m_originalShroudClearingRange = 0.0f;
+		}
 	}
 	else if( xfer->getXferMode() == XFER_LOAD )
 	{

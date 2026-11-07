@@ -4648,6 +4648,160 @@ Object* AIUpdateInterface::getNextMoodTarget( Bool calledByAI, Bool calledDuring
 
 	Object *newVictim = TheAI->findClosestEnemy(obj, rangeToFindWithin, flags, getAttackInfo());
 
+	if (newVictim != nullptr && (obj->isKindOf(KINDOF_ANTIAIR) || obj->isKindOf(KINDOF_HEAVY_ANTIAIR)))
+	{
+				static UnsignedInt s_lastAssignmentFrame = 0;
+				static std::unordered_map<ObjectID, Int> s_provisionalAssignments;
+				UnsignedInt nowFrameLocal = TheGameLogic->getFrame();
+				if (s_lastAssignmentFrame != nowFrameLocal) {
+						s_provisionalAssignments.clear();
+						s_lastAssignmentFrame = nowFrameLocal;
+				}
+
+				PartitionFilterRelationship filterTeam(obj, PartitionFilterRelationship::ALLOW_ENEMIES);
+				PartitionFilterAlive filterAlive;
+				PartitionFilterSameMapStatus filterMapStatus(obj);
+				PartitionFilterRejectBuildings filterBldgs(obj);
+				PartitionFilterStealthedAndUndetected filterStealth(obj, false);
+				PartitionFilterLineOfSight filterLOS(obj);
+				PartitionFilterPossibleToAttack filterAttack(ATTACK_NEW_TARGET, obj, CMD_FROM_AI);
+				PartitionFilterInsignificantBuildings filterInsignificant(true, false);
+				int fogPlayerIndex = obj->getControllingPlayer() ? obj->getControllingPlayer()->getPlayerIndex() : -1;
+				PartitionFilterFreeOfFog filterFogged(fogPlayerIndex);
+
+				PartitionFilter *filters[16];
+				Int numFilters = 0;
+				filters[numFilters++] = &filterTeam;
+				filters[numFilters++] = &filterAlive;
+				filters[numFilters++] = &filterMapStatus;
+				if (!(flags & AI::ATTACK_BUILDINGS)) filters[numFilters++] = &filterBldgs;
+				if (flags & AI::CAN_SEE) filters[numFilters++] = &filterLOS;
+				if (flags & AI::CAN_ATTACK) filters[numFilters++] = &filterAttack;
+				if (flags & AI::UNFOGGED) filters[numFilters++] = &filterFogged;
+				if (flags & AI::IGNORE_INSIGNIFICANT_BUILDINGS) filters[numFilters++] = &filterInsignificant;
+				filters[numFilters++] = &filterStealth;
+				filters[numFilters] = nullptr;
+
+		ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange(obj, rangeToFindWithin, FROM_BOUNDINGSPHERE_2D, filters, ITER_SORTED_NEAR_TO_FAR);
+		MemoryPoolObjectHolder holder(iter);
+
+		Object *best = nullptr;
+		Int bestCount = INT_MAX;
+		Int bestNeedDiff = -1;
+
+				Weapon* myWeapon = obj->getCurrentWeapon();
+				UnsignedInt nowFrame = TheGameLogic->getFrame();
+				Bool myWeaponReady = FALSE;
+				if (myWeapon) {
+						myWeaponReady = (myWeapon->getStatus() == READY_TO_FIRE && myWeapon->getPossibleNextShotFrame() <= nowFrame);
+				}
+
+		for (Object *cand = iter->first(); cand; cand = iter->next())
+		{
+			if (!cand->isKindOf(KINDOF_AIRCRAFT) && !cand->isKindOf(KINDOF_HEAVY_AIRCRAFT) && !cand->isKindOf(KINDOF_SPECIAL_AIRCRAFT))
+				continue;
+
+			CanAttackResult res = obj->getAbleToAttackSpecificObject(ATTACK_NEW_TARGET, cand, CMD_FROM_AI);
+			if (res != ATTACKRESULT_POSSIBLE && res != ATTACKRESULT_POSSIBLE_AFTER_MOVING)
+				continue;
+
+			Int count = 0;
+			{
+								PartitionFilterRejectBuildings afb(obj);
+								PartitionFilterRelationship ateam(obj, PartitionFilterRelationship::ALLOW_ALLIES);
+								PartitionFilterAlive aalive;
+								PartitionFilterSameMapStatus ams(obj);
+								PartitionFilter *afilters[8];
+								Int anum = 0;
+								afilters[anum++] = &afb;
+								afilters[anum++] = &ateam;
+								afilters[anum++] = &aalive;
+								afilters[anum++] = &ams;
+								afilters[anum] = nullptr;
+
+								Real allyScanRadius = rangeToFindWithin;
+								const Real MIN_ALLY_SCAN_RADIUS = 2000.0f;
+								if (allyScanRadius < MIN_ALLY_SCAN_RADIUS) allyScanRadius = MIN_ALLY_SCAN_RADIUS;
+
+								ObjectIterator *aiter = ThePartitionManager->iterateObjectsInRange(cand, allyScanRadius, FROM_BOUNDINGSPHERE_2D, afilters, ITER_SORTED_NEAR_TO_FAR);
+				MemoryPoolObjectHolder ah(aiter);
+																for (Object *ally = aiter->first(); ally; ally = aiter->next())
+																{
+																				if (ally == obj) continue;
+																				AIUpdateInterface* allyAI = ally->getAI();
+																				if (!allyAI) continue;
+																				Object* allyVictim = allyAI->getCurrentVictim();
+																				if (!allyVictim || allyVictim->getID() != cand->getID()) continue;
+
+																				if (obj->isKindOf(KINDOF_ANTIAIR))
+																				{
+																								if (!ally->isKindOf(KINDOF_ANTIAIR)) continue;
+																								++count;
+																				}
+								else
+								{
+												if (!ally->isKindOf(KINDOF_HEAVY_ANTIAIR)) continue;
+												UnsignedInt pctReady = ally->getMostPercentReadyToFireAnyWeapon();
+												if (pctReady >= 100)
+												{
+																++count;
+												}
+								}
+																}
+			}
+
+			Int provisional = 0;
+			auto itpa = s_provisionalAssignments.find(cand->getID());
+			if (itpa != s_provisionalAssignments.end()) provisional = itpa->second;
+			count += provisional;
+
+			if (obj->isKindOf(KINDOF_ANTIAIR))
+			{
+				if (count < bestCount)
+				{
+					bestCount = count;
+					best = cand;
+					if (bestCount == 0) break;
+				}
+			}
+			else
+			{
+				Int need = 1;
+				Weapon* w = myWeapon;
+								if (w)
+								{
+										Real dmg = w->estimateWeaponDamage(obj, cand);
+					Real hp = cand->getBodyModule()->getHealth();
+					if (dmg > 0.0f)
+						need = (Int)ceil(hp / dmg);
+				}
+				Int needDiff = need - count;
+				if (needDiff > 0 && myWeaponReady)
+				{
+					if (needDiff > bestNeedDiff || best == nullptr)
+					{
+						bestNeedDiff = needDiff;
+						bestCount = count;
+						best = cand;
+					}
+				}
+			}
+		}
+
+				if (best)
+				{
+						newVictim = best;
+						if (obj->isKindOf(KINDOF_HEAVY_ANTIAIR))
+						{
+				s_provisionalAssignments[best->getID()]++;
+						}
+				}
+								else if (obj->isKindOf(KINDOF_HEAVY_ANTIAIR))
+								{
+												newVictim = nullptr;
+								}
+	}
+
 /*
 DEBUG_LOG(("GNMT frame %d: %s %08lx (con %s %08lx) uses range %f, flags %08lx, %s finds %s %08lx",
 	now,

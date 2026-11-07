@@ -120,6 +120,7 @@ const FieldParse UpgradeTemplate::m_upgradeFieldParseTable[] =
 	{ "BuildTime",					INI::parseReal,						nullptr, offsetof( UpgradeTemplate, m_buildTime ) },
 	{ "BuildCost",					INI::parseInt,						nullptr, offsetof( UpgradeTemplate, m_cost ) },
 	{ "ButtonImage",				INI::parseAsciiString,		nullptr, offsetof( UpgradeTemplate, m_buttonImageName ) },
+	{ "SciencesToGrant",		INI::parseAsciiStringVector, nullptr, offsetof( UpgradeTemplate, m_sciencesToGrant ) },
 	{ "ResearchSound",			INI::parseAudioEventRTS,	nullptr, offsetof( UpgradeTemplate, m_researchSound ) },
 	{ "UnitSpecificSound",	INI::parseAudioEventRTS,	nullptr, offsetof( UpgradeTemplate, m_unitSpecificSound ) },
 	{ "AcademyClassify",		INI::parseIndexList,			TheAcademyClassificationTypeNames, offsetof( UpgradeTemplate, m_academyClassificationType ) },

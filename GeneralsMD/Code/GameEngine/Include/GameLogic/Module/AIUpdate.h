@@ -298,6 +298,8 @@ protected:
 public:
 	AIUpdateInterface( Thing *thing, const ModuleData* moduleData );
 	// virtual destructor prototype provided by memory pool declaration
+	virtual void setManualLockedDeploy(Bool locked, const Coord3D* deployPos) { (void)locked; (void)deployPos; }
+	virtual Bool isManualLockedDeploy() const { return FALSE; }
 
 	virtual AIUpdateInterface* getAIUpdateInterface() override { return this; }
 

@@ -62,6 +62,7 @@ enum ScienceType CPP_11(: Int);
 enum EditorSortingType CPP_11(: Int);
 enum ShadowType CPP_11(: Int);
 class WeaponTemplateSet;
+class WeaponTemplate;
 class ArmorTemplateSet;
 class FXList;
 
@@ -133,6 +134,9 @@ enum ThingTemplateAudioType CPP_11(: Int)
 	TTAUDIO_voiceAttackSpecial,				///< Unit is ordered to use a special attack
 	TTAUDIO_voiceAttackAir,						///< Unit is ordered to attack an airborne unit
 	TTAUDIO_voiceGuard,								///< Unit is ordered to guard an area
+
+	TTAUDIO_voiceDeploy,							///< Unit is ordered to deploy
+	TTAUDIO_voiceUnDeploy,						///< Unit is ordered to undeploy
 
 	TTAUDIO_COUNT
 };
@@ -427,11 +431,17 @@ public:
 	Real getFenceXOffset() const { return m_fenceXOffset; }  // return fence offset
 
 	Bool isBridge() const { return m_isBridge; }  // return fence offset
+	Bool preferManualDeployLogic() const { return m_preferManualDeployLogic; }
 	Bool isBridgeLike() const { return isBridge() || isKindOf(KINDOF_WALK_ON_TOP_OF_WALL); }
 
 	// Only Object can ask this.  Everyone else should ask the Object.  In fact, you really should ask the Object everything.
 	Real friend_calcVisionRange() const { return m_visionRange; }  ///< get vision range
 	Real friend_calcShroudClearingRange() const { return m_shroudClearingRange; }  ///< get vision range for Shroud ONLY (Design requested split)
+	Real getDeployedVisionRange() const { return m_deployedVisionRange; }
+	Real getDeployedShroudClearingRange() const { return m_deployedShroudClearingRange; }
+	Real getDeployedInfluenceRadarRange() const { return m_deployedInfluenceRadarRange; }
+	const WeaponTemplate* getFireWeaponUponDeployed() const { return m_fireWeaponUponDeployed; }
+	const WeaponTemplate* getFireWeaponUponUndeploying() const { return m_fireWeaponUponUndeploying; }
 
 	//This one is okay to check directly... because it doesn't get effected by bonuses.
 	Real getShroudRevealToAllRange() const { return m_shroudRevealToAllRange; }
@@ -505,6 +515,8 @@ public:
 	const AudioEventRTS *getSoundPromotedElite() const				{ return getAudio(TTAUDIO_soundPromotedElite); }
 	const AudioEventRTS *getSoundPromotedHero() const					{ return getAudio(TTAUDIO_soundPromotedHero); }
 	const AudioEventRTS *getSoundFalling() const							{ return getAudio(TTAUDIO_soundFalling); }
+	const AudioEventRTS *getVoiceDeploy() const								{ return getAudio(TTAUDIO_voiceDeploy); }
+	const AudioEventRTS *getVoiceUnDeploy() const							{ return getAudio(TTAUDIO_voiceUnDeploy); }
 
   Bool hasSoundAmbient() const                              { return hasAudio(TTAUDIO_soundAmbient); }
 
@@ -718,12 +730,17 @@ private:
 	const ThingTemplate*	m_reskinnedFrom;									///< non nullptr if we were generated via a reskin
 	const Image *					m_selectedPortraitImage;		/// portrait image when selected (to display in GUI)
 	const Image	*					m_buttonImage;
+	const WeaponTemplate*	m_fireWeaponUponDeployed;
+	const WeaponTemplate*	m_fireWeaponUponUndeploying;
 
 	// ---- Real-sized things
 	Real					m_fenceWidth;								///< Fence width for fence type objects.
 	Real					m_fenceXOffset;							///< Fence X offset for fence type objects.
 	Real					m_visionRange;								///< object "sees" this far around itself
 	Real					m_shroudClearingRange;				///< Since So many things got added to "Seeing" functionality, we need to split this part out.
+	Real					m_deployedVisionRange;
+	Real					m_deployedShroudClearingRange;
+	Real					m_deployedInfluenceRadarRange;
 	Real					m_shroudRevealToAllRange;			///< When > zero, the shroud gets revealed to all players.
 	Real					m_placementViewAngle;				///< when placing buildings this will be the angle of the building when "floating" at the mouse
 	Real					m_factoryExitWidth;					///< when placing buildings this will be the width of the reserved exit area on the right side.
@@ -754,6 +771,7 @@ private:
   Bool          m_maxSimultaneousDeterminedBySuperweaponRestriction; ///< If true, override value in m_maxSimultaneousOfType with value from GameInfo::getSuperweaponRestriction()
 	Bool					m_isPrerequisite;							///< Is this thing considered in a prerequisite for any other thing?
 	Bool					m_isBridge;										///< True if this model is a bridge.
+	Bool					m_preferManualDeployLogic;		///< Prefer spot-based manual deployment when attacking.
  	Bool					m_isBuildFacility;						///< is this the build facility for something? (calculated based on other template's prereqs)
 	Bool					m_isTrainable;								///< Whether or not I can even gain experience
 	Bool          m_enterGuard;									///< Whether or not I can enter objects when guarding

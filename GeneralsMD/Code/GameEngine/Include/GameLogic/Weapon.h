@@ -770,6 +770,7 @@ public:
 	*/
 	void setClipPercentFull(Real percent, Bool allowReduction);
 	UnsignedInt getSuspendFXFrame() const { return m_suspendFXFrame; }
+	Real estimateWeaponDamage(const Object* sourceObj, const Object* victimObj, const Coord3D* victimPos);
 
 protected:
 
@@ -786,7 +787,6 @@ protected:
 		ObjectID* projectileID,
 		Bool inflictDamage
 	);
-	Real estimateWeaponDamage(const Object *sourceObj, const Object *victimObj, const Coord3D* victimPos);
 	void reloadWithBonus(const Object *source, const WeaponBonus& bonus, Bool loadInstantly);
 
 	void processRequestAssistance( const Object *requestingObject, Object *victimObject ); ///< Weapons can call for extra attacks from nearby objects

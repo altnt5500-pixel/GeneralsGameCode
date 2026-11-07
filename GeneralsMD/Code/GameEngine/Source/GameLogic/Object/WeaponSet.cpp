@@ -98,6 +98,7 @@ static_assert(ARRAY_SIZE(WeaponSetFlags::s_bitNameList) == WeaponSetFlags::NumBi
 //-------------------------------------------------------------------------------------------------
 void WeaponTemplateSet::clear()
 {
+	m_fireCondition = WEAPONSET_FIRE_CONDITION_NONE;
 	m_isReloadTimeShared = false;
 	m_isWeaponLockSharedAcrossSets = FALSE;
 	m_types.clear();
@@ -118,6 +119,19 @@ Bool WeaponTemplateSet::hasAnyWeapons() const
 			return true;
 	}
 	return false;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool WeaponSet::canFireWeapon(const Weapon *weapon, const Object *obj) const
+{
+	if (weapon == nullptr || obj == nullptr || m_curWeaponTemplateSet == nullptr)
+		return TRUE;
+
+	const WeaponSlotType slot = weapon->getWeaponSlot();
+	if (slot < PRIMARY_WEAPON || slot >= WEAPONSLOT_COUNT || m_weapons[slot] != weapon)
+		return TRUE;
+
+	return m_curWeaponTemplateSet->getFireCondition() != WEAPONSET_FIRE_CONDITION_RADAR_SYSTEM || obj->hasDeployedRadarInfluence();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -144,12 +158,23 @@ void WeaponTemplateSet::parsePreferredAgainst(INI* ini, void *instance, void * /
 	KindOfMaskType::parseFromINI(ini, instance, &self->m_preferredAgainst[wslot], nullptr);
 }
 
+void WeaponTemplateSet::parseFireConditions(INI* ini, void *instance, void * /*store*/, const void* userData)
+{
+	static const char *const fireConditionNames[] = { "None", "RadarSystem", nullptr };
+	WeaponTemplateSet* self = (WeaponTemplateSet*)instance;
+	Int condition = INI::scanIndexList(ini->getNextToken(), fireConditionNames);
+	if (condition < 0 || condition >= WEAPONSET_FIRE_CONDITION_COUNT)
+		throw INI_INVALID_DATA;
+	self->m_fireCondition = (WeaponSetFireConditionType)condition;
+}
+
 //-------------------------------------------------------------------------------------------------
 void WeaponTemplateSet::parseWeaponTemplateSet( INI* ini, const ThingTemplate* tt )
 {
 	static const FieldParse myFieldParse[] =
 	{
 		{ "Conditions", WeaponSetFlags::parseFromINI, nullptr, offsetof( WeaponTemplateSet, m_types ) },
+		{ "FireConditions", WeaponTemplateSet::parseFireConditions, nullptr, 0 },
 		{ "Weapon",	WeaponTemplateSet::parseWeapon,	nullptr, 0 },
 		{ "AutoChooseSources",	WeaponTemplateSet::parseAutoChoose, nullptr, 0 },
 		{ "PreferredAgainst", WeaponTemplateSet::parsePreferredAgainst, nullptr, 0 },

@@ -87,6 +87,18 @@ enum DamageType CPP_11(: Int)
 	DAMAGE_MICROWAVE							/*= 35*/, ///< Radiation that only affects infantry
 	DAMAGE_KILL_GARRISONED				/*= 36*/, ///< Kills Passengers up to the number specified in Damage
 	DAMAGE_STATUS									/*= 37*/, ///< Damage that gives a status condition, not that does hitpoint damage
+#if !RTS_GENERALS
+	DAMAGE_JET_MISSILE_AT,
+	DAMAGE_JET_MISSILE_AA,
+	DAMAGE_JET_MISSILE_AG,
+	DAMAGE_JET_BOMB,
+	DAMAGE_ARMOR_PIERCING_HEAVY,
+	DAMAGE_30MM_MACHINEGUN,
+	DAMAGE_ANTI_RADAR,
+	DAMAGE_ANTI_TANK,
+	DAMAGE_EXPLOSION_NUKE,
+	DAMAGE_EXPLOSION_CRUISE_MISSILE,
+#endif
 
 	// Please note: There is a string array DamageTypeFlags::s_bitNameList[]
 

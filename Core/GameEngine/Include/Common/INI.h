@@ -164,6 +164,9 @@ class INI
 	INI& operator=(const INI&) CPP_11(= delete);
 
 public:
+	typedef void (*INIValidationErrorCallback)(const char *filename, UnsignedInt lineNum, const char *message);
+	typedef void (*INIValidationWarningCallback)(const char *filename, UnsignedInt lineNum, const char *message);
+
 	INI();
 
 	// TheSuperHackers @feature xezon 19/08/2025
@@ -179,6 +182,13 @@ public:
 	// Load one specific INI file by name.
 	// Throws if the INI file is not found or is not read correctly.
 	UnsignedInt load( AsciiString filename, INILoadType loadType, Xfer *pXfer );
+
+	static void setValidationErrorCallback(INIValidationErrorCallback callback);
+	static void setValidationWarningCallback(INIValidationWarningCallback callback);
+	static void clearValidationState();
+	static Bool isValidationEnabled();
+	static Bool reportValidationWarning(const INI *ini, const char *message);
+	static Bool wasFileLoadedForValidation(const AsciiString& filename);
 
 	static Bool isDeclarationOfType( AsciiString blockType, AsciiString blockName, char *bufferToCheck );
 	static Bool isEndOfBlock( char *bufferToCheck );

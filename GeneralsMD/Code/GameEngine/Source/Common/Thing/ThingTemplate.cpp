@@ -46,6 +46,7 @@
 #include "Common/MessageStream.h"
 #include "Common/Module.h"
 #include "Common/ModuleFactory.h"
+#include "Common/NameKeyGenerator.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/ProductionPrerequisite.h"
@@ -105,6 +106,27 @@ static void parseKindOfFromINI(INI* ini, void* instance, void *store, const void
 #endif
 }
 
+static void parseDeployTransitionWeapon(INI* ini, void* instance, void* store, const void* /*userData*/)
+{
+	const char* token = ini->getNextToken();
+	const WeaponTemplate* weaponTemplate = nullptr;
+
+	if (token != nullptr && stricmp(token, "None") != 0)
+	{
+		weaponTemplate = TheWeaponStore->findWeaponTemplateByNameKey(TheNameKeyGenerator->nameToKey(token));
+		if (weaponTemplate == nullptr)
+		{
+			throw INI_INVALID_DATA;
+		}
+	}
+	else if (token == nullptr)
+	{
+		throw INI_INVALID_DATA;
+	}
+
+	*static_cast<const WeaponTemplate**>(store) = weaponTemplate;
+}
+
 /*
 	NOTE NOTE NOTE -- s_objectFieldParseTable and s_objectReskinFieldParseTable must be updated in tandem!
 
@@ -130,6 +152,7 @@ static void parseKindOfFromINI(INI* ini, void* instance, void *store, const void
 const FieldParse ThingTemplate::s_objectFieldParseTable[] =
 {
 	{ "DisplayName",					INI::parseAndTranslateLabel,					nullptr,								offsetof( ThingTemplate, m_displayName ) },
+	{ "PreferManualDeployLogic", INI::parseBool, nullptr, offsetof( ThingTemplate, m_preferManualDeployLogic ) },
 	{ "RadarPriority",				INI::parseByteSizedIndexList,					RadarPriorityNames, offsetof( ThingTemplate, m_radarPriority ) },
 	{ "TransportSlotCount",		INI::parseUnsignedByte,								nullptr,		offsetof( ThingTemplate, m_transportSlotCount ) },
 	{ "FenceWidth",						INI::parseReal,												nullptr,		offsetof( ThingTemplate, m_fenceWidth ) },
@@ -139,6 +162,11 @@ const FieldParse ThingTemplate::s_objectFieldParseTable[] =
 	{ "WeaponSet",						ThingTemplate::parseWeaponTemplateSet,nullptr, 0},
 	{ "VisionRange",					INI::parseReal,												nullptr,		offsetof( ThingTemplate, m_visionRange ) },
 	{ "ShroudClearingRange",	INI::parseReal,												nullptr,		offsetof( ThingTemplate, m_shroudClearingRange ) },
+	{ "DeployedVisionRange", INI::parseReal, nullptr, offsetof( ThingTemplate, m_deployedVisionRange ) },
+	{ "DeployedShroudClearingRange", INI::parseReal, nullptr, offsetof( ThingTemplate, m_deployedShroudClearingRange ) },
+	{ "DeployedInfluenceRadarRange", INI::parseReal, nullptr, offsetof( ThingTemplate, m_deployedInfluenceRadarRange ) },
+	{ "FireWeaponUponDeployed", parseDeployTransitionWeapon, nullptr, offsetof( ThingTemplate, m_fireWeaponUponDeployed ) },
+	{ "FireWeaponUponUndeploying", parseDeployTransitionWeapon, nullptr, offsetof( ThingTemplate, m_fireWeaponUponUndeploying ) },
 	{ "ShroudRevealToAllRange",	INI::parseReal,											nullptr,		offsetof( ThingTemplate, m_shroudRevealToAllRange ) },
 
 	{ "PlacementViewAngle",		INI::parseAngleReal,									nullptr,		offsetof( ThingTemplate, m_placementViewAngle ) },
@@ -215,6 +243,8 @@ const FieldParse ThingTemplate::s_objectFieldParseTable[] =
 	{ "VoiceAttackSpecial",		INI::parseDynamicAudioEventRTS,	nullptr,		offsetof( ThingTemplate, m_audioarray.m_audio[TTAUDIO_voiceAttackSpecial ]) },
 	{ "VoiceAttackAir",				INI::parseDynamicAudioEventRTS,	nullptr,		offsetof( ThingTemplate, m_audioarray.m_audio[TTAUDIO_voiceAttackAir ]) },
 	{ "VoiceGuard",						INI::parseDynamicAudioEventRTS,	nullptr,		offsetof( ThingTemplate, m_audioarray.m_audio[TTAUDIO_voiceGuard ]) },
+	{ "VoiceDeploy",					INI::parseDynamicAudioEventRTS,	nullptr,		offsetof( ThingTemplate, m_audioarray.m_audio[TTAUDIO_voiceDeploy ]) },
+	{ "VoiceUnDeploy",				INI::parseDynamicAudioEventRTS,	nullptr,		offsetof( ThingTemplate, m_audioarray.m_audio[TTAUDIO_voiceUnDeploy ]) },
 	{ "SoundMoveStart",				INI::parseDynamicAudioEventRTS,	nullptr,		offsetof( ThingTemplate, m_audioarray.m_audio[TTAUDIO_soundMoveStart]) },
 	{ "SoundMoveStartDamaged",INI::parseDynamicAudioEventRTS,	nullptr,		offsetof( ThingTemplate, m_audioarray.m_audio[TTAUDIO_soundMoveStartDamaged]) },
 	{ "SoundMoveLoop",				INI::parseDynamicAudioEventRTS,	nullptr,		offsetof( ThingTemplate, m_audioarray.m_audio[TTAUDIO_soundMoveLoop]) },
@@ -326,60 +356,63 @@ void ModuleInfo::addModuleInfo(ThingTemplate *thingTemplate,
 	// for this thing template
 	//
 #if defined(RTS_DEBUG)
-	// get module info
-	const Nugget *nugget;
-
-	nugget = thingTemplate->getBehaviorModuleInfo().getNuggetWithTag( moduleTag );
-	if( nugget != nullptr )
+	if (!INI::isValidationEnabled())
 	{
+		// get module info
+		const Nugget *nugget;
 
-		// compare this nugget tag against the tag for the new data we're going to submit
-		DEBUG_ASSERTCRASH( nugget->m_moduleTag != moduleTag,
-											 ("addModuleInfo - ERROR defining module '%s' on thing template '%s'.  The module '%s' has the tag '%s' which must be unique among all modules for this object, but the tag '%s' is also already on module '%s' within this object.\n\nPlease make unique tag names within an object definition",
-												name.str(),
-												thingTemplate->getName().str(),
-												name.str(),
-												moduleTag.str(),
-												moduleTag.str(),
-												nugget->first.str()) );
+		nugget = thingTemplate->getBehaviorModuleInfo().getNuggetWithTag( moduleTag );
+		if( nugget != nullptr )
+		{
 
-		// srj sez: prevent people from ignoring this.
-		throw INI_INVALID_DATA;
-	}
+			// compare this nugget tag against the tag for the new data we're going to submit
+			DEBUG_ASSERTCRASH( nugget->m_moduleTag != moduleTag,
+													 ("addModuleInfo - ERROR defining module '%s' on thing template '%s'.  The module '%s' has the tag '%s' which must be unique among all modules for this object, but the tag '%s' is also already on module '%s' within this object.\n\nPlease make unique tag names within an object definition",
+														name.str(),
+														thingTemplate->getName().str(),
+														name.str(),
+														moduleTag.str(),
+														moduleTag.str(),
+														nugget->first.str()) );
 
-	nugget = thingTemplate->getDrawModuleInfo().getNuggetWithTag( moduleTag );
-	if( nugget != nullptr )
-	{
+			// srj sez: prevent people from ignoring this.
+			throw INI_INVALID_DATA;
+		}
 
-		// compare this nugget tag against the tag for the new data we're going to submit
-		DEBUG_ASSERTCRASH( nugget->m_moduleTag != moduleTag,
-											 ("addModuleInfo - ERROR defining module '%s' on thing template '%s'.  The module '%s' has the tag '%s' which must be unique among all modules for this object, but the tag '%s' is also already on module '%s' within this object.\n\nPlease make unique tag names within an object definition",
-												name.str(),
-												thingTemplate->getName().str(),
-												name.str(),
-												moduleTag.str(),
-												moduleTag.str(),
-												nugget->first.str()) );
+		nugget = thingTemplate->getDrawModuleInfo().getNuggetWithTag( moduleTag );
+		if( nugget != nullptr )
+		{
 
-		// srj sez: prevent people from ignoring this.
-		throw INI_INVALID_DATA;
-	}
+			// compare this nugget tag against the tag for the new data we're going to submit
+			DEBUG_ASSERTCRASH( nugget->m_moduleTag != moduleTag,
+													 ("addModuleInfo - ERROR defining module '%s' on thing template '%s'.  The module '%s' has the tag '%s' which must be unique among all modules for this object, but the tag '%s' is also already on module '%s' within this object.\n\nPlease make unique tag names within an object definition",
+														name.str(),
+														thingTemplate->getName().str(),
+														name.str(),
+														moduleTag.str(),
+														moduleTag.str(),
+														nugget->first.str()) );
 
-	nugget = thingTemplate->getClientUpdateModuleInfo().getNuggetWithTag( moduleTag );
-	if( nugget != nullptr )
-	{
+			// srj sez: prevent people from ignoring this.
+			throw INI_INVALID_DATA;
+		}
 
-		// compare this nugget tag against the tag for the new data we're going to submit
-		DEBUG_ASSERTCRASH( nugget->m_moduleTag != moduleTag,
-											 ("addModuleInfo - ERROR defining module '%s' on thing template '%s'.  The module '%s' has the tag '%s' which must be unique among all modules for this object, but the tag '%s' is also already on module '%s' within this object.\n\nPlease make unique tag names within an object definition",
-												name.str(),
-												thingTemplate->getName().str(),
-												name.str(),
-												moduleTag.str(),
-												moduleTag.str(),
-												nugget->first.str()) );
-		// srj sez: prevent people from ignoring this.
-		throw INI_INVALID_DATA;
+		nugget = thingTemplate->getClientUpdateModuleInfo().getNuggetWithTag( moduleTag );
+		if( nugget != nullptr )
+		{
+
+			// compare this nugget tag against the tag for the new data we're going to submit
+			DEBUG_ASSERTCRASH( nugget->m_moduleTag != moduleTag,
+													 ("addModuleInfo - ERROR defining module '%s' on thing template '%s'.  The module '%s' has the tag '%s' which must be unique among all modules for this object, but the tag '%s' is also already on module '%s' within this object.\n\nPlease make unique tag names within an object definition",
+														name.str(),
+														thingTemplate->getName().str(),
+														name.str(),
+														moduleTag.str(),
+														moduleTag.str(),
+														nugget->first.str()) );
+			// srj sez: prevent people from ignoring this.
+			throw INI_INVALID_DATA;
+		}
 	}
 
 #endif
@@ -628,6 +661,14 @@ void ThingTemplate::parseModuleName(INI* ini, void *instance, void* store, const
 
 	Bool inheritable = (self->m_moduleParsingMode == MODULEPARSE_INHERITABLE);
   Bool overrideableByLikeKind = (self->m_moduleParsingMode == MODULEPARSE_OVERRIDEABLE_BY_LIKE_KIND);
+	if (self->getBehaviorModuleInfo().getNuggetWithTag(moduleTagStr) != nullptr ||
+		self->getDrawModuleInfo().getNuggetWithTag(moduleTagStr) != nullptr ||
+		self->getClientUpdateModuleInfo().getNuggetWithTag(moduleTagStr) != nullptr)
+	{
+		AsciiString warningMessage;
+		warningMessage.format("ModuleTag '%s' is repeated in Object '%s'", moduleTagStr.str(), self->getName().str());
+		INI::reportValidationWarning(ini, warningMessage.str());
+	}
 	mi->addModuleInfo(self, tokenStr, moduleTagStr, data, interfaceMask, inheritable, overrideableByLikeKind);
 }
 
@@ -1007,6 +1048,8 @@ ThingTemplate::ThingTemplate() :
 {
 	m_moduleParsingMode = MODULEPARSE_NORMAL;
 	m_reskinnedFrom = nullptr;
+	m_fireWeaponUponDeployed = nullptr;
+	m_fireWeaponUponUndeploying = nullptr;
 	m_radarPriority = RADAR_PRIORITY_INVALID;
 
 	m_nextThingTemplate = nullptr;
@@ -1015,6 +1058,9 @@ ThingTemplate::ThingTemplate() :
 	m_fenceXOffset = 0;
 	m_visionRange = 0.0f;
 	m_shroudClearingRange = -1.0f;
+	m_deployedVisionRange = -1.0f;
+	m_deployedShroudClearingRange = -1.0f;
+	m_deployedInfluenceRadarRange = -1.0f;
 	m_shroudRevealToAllRange = -1.0f;
 
 	m_buildCost = 0;
@@ -1032,6 +1078,7 @@ ThingTemplate::ThingTemplate() :
 		m_skillPointValues[levelIndex] = USE_EXP_VALUE_FOR_SKILL_VALUE;
 	}
 	m_isTrainable = FALSE;
+	m_preferManualDeployLogic = FALSE;
 	m_enterGuard = FALSE;
 	m_hijackGuard = FALSE;
 
@@ -1092,6 +1139,8 @@ void ThingTemplate::validateAudio()
 		}
 
 	AUDIO_TEST(VoiceSelect)
+	AUDIO_TEST(VoiceDeploy)
+	AUDIO_TEST(VoiceUnDeploy)
 	AUDIO_TEST(VoiceGroupSelect)
 	AUDIO_TEST(VoiceMove)
 	AUDIO_TEST(VoiceAttack)

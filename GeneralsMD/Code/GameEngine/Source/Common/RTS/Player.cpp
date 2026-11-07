@@ -2640,6 +2640,15 @@ Bool Player::attemptToPurchaseScience(ScienceType science)
 	Int cost = TheScienceStore->getSciencePurchaseCost(science);
 	addSciencePurchasePoints(-cost);
 	addScience(science);
+	const std::vector<AsciiString>& upgradesToGrant = TheScienceStore->getUpgradesToGrant(science);
+	for (std::vector<AsciiString>::const_iterator it = upgradesToGrant.begin(); it != upgradesToGrant.end(); ++it)
+	{
+		const UpgradeTemplate* upgradeTemplate = TheUpgradeCenter->findUpgrade(*it);
+		if (upgradeTemplate)
+			addUpgrade(upgradeTemplate, UPGRADE_STATUS_COMPLETE);
+		else
+			DEBUG_CRASH(("Science %s grants unknown upgrade %s.", TheScienceStore->getInternalNameForScience(science).str(), it->str()));
+	}
 
 	getAcademyStats()->recordGeneralsPointsSpent( cost );
 
@@ -3067,6 +3076,7 @@ Bool Player::hasUpgradeInProduction( const UpgradeTemplate *upgradeTemplate )
 //=================================================================================================
 Upgrade *Player::addUpgrade( const UpgradeTemplate *upgradeTemplate, UpgradeStatusType status )
 {
+	Bool wasComplete = hasUpgradeComplete(upgradeTemplate);
 	Upgrade *u = findUpgrade( upgradeTemplate );
 
 	// if no upgrade instance found, make a new one
@@ -3099,6 +3109,12 @@ Upgrade *Player::addUpgrade( const UpgradeTemplate *upgradeTemplate, UpgradeStat
 		m_upgradesInProgress.clear( newMask );
 		m_upgradesCompleted.set( newMask );
 		onUpgradeCompleted( upgradeTemplate );
+		if (!wasComplete)
+		{
+			const std::vector<AsciiString>& sciencesToGrant = upgradeTemplate->getSciencesToGrant();
+			for (std::vector<AsciiString>::const_iterator it = sciencesToGrant.begin(); it != sciencesToGrant.end(); ++it)
+				grantScience(TheScienceStore->getScienceFromInternalName(*it));
+		}
 	}
 
 	if( ThePlayerList->getLocalPlayer() == this )

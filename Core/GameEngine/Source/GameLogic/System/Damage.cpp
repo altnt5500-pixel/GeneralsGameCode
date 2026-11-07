@@ -83,6 +83,18 @@ const char* const DamageTypeFlags::s_bitNameList[] =
 	"MICROWAVE",
 	"KILL_GARRISONED",
 	"STATUS",
+#if !RTS_GENERALS
+	"JET_MISSILE_AT",
+	"JET_MISSILE_AA",
+	"JET_MISSILE_AG",
+	"JET_BOMB",
+	"ARMOR_PIERCING_HEAVY",
+	"30MM_MACHINEGUN",
+	"ANTI_RADAR",
+	"ANTI_TANK",
+	"EXPLOSION_NUKE",
+	"EXPLOSION_CRUISE_MISSILE",
+#endif
 
 	nullptr
 };

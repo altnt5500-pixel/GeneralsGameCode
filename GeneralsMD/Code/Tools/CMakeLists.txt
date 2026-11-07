@@ -4,6 +4,7 @@
 if(RTS_BUILD_ZEROHOUR_TOOLS)
     add_subdirectory(GUIEdit)
     add_subdirectory(ImagePacker)
+    add_subdirectory(INIValidator)
     add_subdirectory(MapCacheBuilder)
     add_subdirectory(W3DView)
     add_subdirectory(wdump)

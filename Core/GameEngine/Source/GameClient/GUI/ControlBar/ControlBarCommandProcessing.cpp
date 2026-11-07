@@ -860,6 +860,20 @@ CBCommandStatus ControlBar::processCommandUI( GameWindow *control,
 
 		}
 
+		case GUI_COMMAND_DEPLOY_ON_SPOT:
+		{
+				TheMessageStream->appendMessage(GameMessage::MSG_DO_DEPLOY);
+				markUIDirty();
+				break;
+		}
+
+		case GUI_COMMAND_UNDEPLOY:
+		{
+			TheMessageStream->appendMessage(GameMessage::MSG_DO_UNDEPLOY);
+			markUIDirty();
+			break;
+		}
+
 		//---------------------------------------------------------------------------------------------
 		case GUI_COMMAND_PURCHASE_SCIENCE:
 		{

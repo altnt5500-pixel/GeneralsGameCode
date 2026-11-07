@@ -395,12 +395,17 @@ AsciiString TheThingTemplateBeingParsedName;
 	}
 	else if( ini->getLoadType() != INI_LOAD_CREATE_OVERRIDES )
 	{
-		//Holy crap, this sucks to debug!!!
+  	//Holy crap, this sucks to debug!!!
 		//If you have two different objects, the previous code would simply
 		//allow you to define multiple objects with the same name, and just
 		//nuke the old one with the new one. So, I (KM) have added this
 		//assert to notify in case of two same-name objects.
-		DEBUG_CRASH(( "[LINE: %d in '%s'] Duplicate factionunit %s found!", ini->getLineNum(), ini->getFilename().str(), name.str() ));
+		AsciiString warningMessage;
+		warningMessage.format("Duplicate Object definition '%s'", name.str());
+		if (!INI::reportValidationWarning(ini, warningMessage.str()))
+		{
+			DEBUG_CRASH(( "[LINE: %d in '%s'] Duplicate factionunit %s found!", ini->getLineNum(), ini->getFilename().str(), name.str() ));
+		}
 	}
 	else
 	{

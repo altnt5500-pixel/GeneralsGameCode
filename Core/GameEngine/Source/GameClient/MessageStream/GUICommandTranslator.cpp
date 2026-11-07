@@ -484,6 +484,29 @@ GameMessageDisposition GUICommandTranslator::translateGameMessage(const GameMess
 
 					}
 
+					case GUI_COMMAND_DEPLOY_ON_LOCATION:
+					{
+						if (BitIsSet(command->getOptions(), NEED_TARGET_POS))
+						{
+							Coord3D world;
+
+							if (TheTacticalView->screenToTerrain(&mouse, &world))
+							{
+								GameMessage* msg = TheMessageStream->appendMessage(GameMessage::MSG_DO_DEPLOY_AT_LOCATION);
+
+								msg->appendLocationArgument(world);
+
+								pickAndPlayUnitVoiceResponse(
+									TheInGameUI->getAllSelectedDrawables(),
+									GameMessage::MSG_DO_DEPLOY_AT_LOCATION
+								);
+							}
+						}
+
+						commandStatus = COMMAND_COMPLETE;
+						break;
+					}
+
 				}
 
 				// used the input

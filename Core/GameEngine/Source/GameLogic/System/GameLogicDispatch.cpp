@@ -460,6 +460,25 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, void *userData )
 			onDoWeapon(msg, currentlySelectedGroup);
 			break;
 		}
+
+		case GameMessage::MSG_DO_DEPLOY:
+		{
+			onDoDeploy(msg, currentlySelectedGroup);
+			break;
+		}
+
+		case GameMessage::MSG_DO_UNDEPLOY:
+		{
+			onDoUndeploy(msg, currentlySelectedGroup);
+			break;
+		}
+
+		case GameMessage::MSG_DO_DEPLOY_AT_LOCATION:
+		{
+			onDoDeployAtLocation(msg, currentlySelectedGroup);
+			break;
+		}
+
 		case GameMessage::MSG_COMBATDROP_AT_OBJECT:
 		{
 			onCombatdropAtObject(msg, currentlySelectedGroup);
@@ -1284,6 +1303,88 @@ bool GameLogic::onDoSpecialPowerAtObject(MAYBE_UNUSED GameMessage *msg, AIGroupP
 		}
 	}
 	return true;
+}
+
+bool GameLogic::onDoDeploy(MAYBE_UNUSED GameMessage *msg, AIGroupPtr &currentlySelectedGroup)
+{
+    Player *msgPlayer = getMessagePlayer(msg);
+
+    if (currentlySelectedGroup)
+    {
+        const VecObjectID &selectedObjects = currentlySelectedGroup->getAllIDs();
+        for (VecObjectID::const_iterator it = selectedObjects.begin(); it != selectedObjects.end(); ++it)
+        {
+            Object *obj = findObjectByID(*it);
+            if (!obj)
+                continue;
+
+            if (obj->getControllingPlayer() != msgPlayer)
+                continue;
+
+            AIUpdateInterface *ai = obj->getAIUpdateInterface();
+            if (!ai)
+                continue;
+
+						ai->setManualLockedDeploy(TRUE, nullptr);
+        }
+    }
+
+    return true;
+}
+
+bool GameLogic::onDoUndeploy(MAYBE_UNUSED GameMessage *msg, AIGroupPtr &currentlySelectedGroup)
+{
+		Player *msgPlayer = getMessagePlayer(msg);
+
+		if (currentlySelectedGroup)
+		{
+				const VecObjectID &selectedObjects = currentlySelectedGroup->getAllIDs();
+				for (VecObjectID::const_iterator it = selectedObjects.begin(); it != selectedObjects.end(); ++it)
+				{
+						Object *obj = findObjectByID(*it);
+						if (!obj)
+								continue;
+
+						if (obj->getControllingPlayer() != msgPlayer)
+								continue;
+
+						AIUpdateInterface *ai = obj->getAIUpdateInterface();
+						if (!ai)
+								continue;
+
+						ai->setManualLockedDeploy(FALSE, nullptr);
+				}
+		}
+
+		return true;
+}
+
+bool GameLogic::onDoDeployAtLocation(MAYBE_UNUSED GameMessage *msg, AIGroupPtr &currentlySelectedGroup)
+{
+    Player *msgPlayer = getMessagePlayer(msg);
+    Coord3D deployPos = msg->getArgument(0)->location;
+
+    if (currentlySelectedGroup)
+    {
+        const VecObjectID &selectedObjects = currentlySelectedGroup->getAllIDs();
+        for (VecObjectID::const_iterator it = selectedObjects.begin(); it != selectedObjects.end(); ++it)
+        {
+            Object *obj = findObjectByID(*it);
+            if (!obj)
+                continue;
+
+            if (obj->getControllingPlayer() != msgPlayer)
+                continue;
+
+            AIUpdateInterface *ai = obj->getAIUpdateInterface();
+            if (!ai)
+                continue;
+
+            ai->setManualLockedDeploy(TRUE, &deployPos);
+        }
+    }
+
+    return true;
 }
 
 bool GameLogic::onDoAttackmoveto(MAYBE_UNUSED GameMessage *msg, AIGroupPtr &currentlySelectedGroup)

@@ -164,6 +164,7 @@ const ScienceInfo* ScienceStore::findScienceInfo(ScienceType st) const
 		static const FieldParse myFieldParse[] =
 		{
 			{ "PrerequisiteSciences", INI::parseScienceVector, nullptr, offsetof( ScienceInfo, m_prereqSciences ) },
+			{ "UpgradesToGrant", INI::parseAsciiStringVector, nullptr, offsetof( ScienceInfo, m_upgradesToGrant ) },
 			{ "SciencePurchasePointCost", INI::parseInt, nullptr, offsetof( ScienceInfo, m_sciencePurchasePointCost ) },
 			{ "IsGrantable", INI::parseBool, nullptr, offsetof( ScienceInfo, m_grantable ) },
 			{ "DisplayName", INI::parseAndTranslateLabel, nullptr, offsetof( ScienceInfo, m_name) },
@@ -238,6 +239,14 @@ Int ScienceStore::getSciencePurchaseCost(ScienceType st) const
 	{
 		return 0;
 	}
+}
+
+//-----------------------------------------------------------------------------
+const std::vector<AsciiString>& ScienceStore::getUpgradesToGrant(ScienceType st) const
+{
+	static const std::vector<AsciiString> empty;
+	const ScienceInfo* si = findScienceInfo(st);
+	return si ? si->m_upgradesToGrant : empty;
 }
 
 //-----------------------------------------------------------------------------

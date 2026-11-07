@@ -1585,7 +1585,7 @@ void Object::preFireCurrentWeapon( const Object *victim )
 	//If we are going to be capable of firing our weapon NEXT frame, set the pre-attack
 	//up now. This gets called by AIAttackFireWeaponState::onEnter().. but the update happens
 	//next frame.
-	if (weapon && TheGameLogic->getFrame() + 1 >= weapon->getPossibleNextShotFrame() )
+	if (weapon && m_weaponSet.canFireWeapon(weapon, this) && TheGameLogic->getFrame() + 1 >= weapon->getPossibleNextShotFrame() )
 	{
 		weapon->preFireWeapon( this, victim );
 		friend_setUndetectedDefector( FALSE );// My secret is out
@@ -1644,6 +1644,54 @@ Relationship Object::getRelationship(const Object *that) const
 
 	return NEUTRAL;
 
+}
+
+//=============================================================================
+// Object::hasDeployedRadarInfluence
+//=============================================================================
+Bool Object::hasDeployedRadarInfluence() const
+{
+	if (ThePartitionManager == nullptr || TheThingFactory == nullptr || getControllingPlayer() == nullptr)
+		return FALSE;
+
+	static Bool rangeInitialized = FALSE;
+	static Real maxRadarRange = 0.0f;
+	if (!rangeInitialized)
+	{
+		for (const ThingTemplate *tt = TheThingFactory->firstTemplate(); tt != nullptr; tt = tt->friend_getNextTemplate())
+			maxRadarRange = MAX(maxRadarRange, tt->getDeployedInfluenceRadarRange());
+		rangeInitialized = TRUE;
+	}
+
+	if (maxRadarRange <= 0.0f)
+		return FALSE;
+
+	PartitionFilter *filters[] = { nullptr };
+	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange(getPosition(), maxRadarRange, FROM_CENTER_2D, filters, ITER_FASTEST);
+	if (iter == nullptr)
+		return FALSE;
+
+	Bool influenced = FALSE;
+	for (Object *radar = iter->first(); radar != nullptr; radar = iter->next())
+	{
+		if (radar == this || radar->isDestroyed() || radar->isEffectivelyDead() ||
+			!radar->testStatus(OBJECT_STATUS_DEPLOYED))
+			continue;
+
+		const Real radarRange = radar->getTemplate()->getDeployedInfluenceRadarRange();
+		if (radarRange <= 0.0f ||
+			ThePartitionManager->getDistanceSquared(radar, this, FROM_CENTER_2D) > radarRange * radarRange)
+			continue;
+
+		if (radar->getControllingPlayer() == getControllingPlayer() || radar->getRelationship(this) == ALLIES)
+		{
+			influenced = TRUE;
+			break;
+		}
+	}
+
+	deleteInstance(iter);
+	return influenced;
 }
 
 //=============================================================================
@@ -4582,7 +4630,18 @@ void Object::giveUpgrade( const UpgradeTemplate *upgradeT )
 {
 	if (upgradeT)
 	{
+		Bool wasComplete = m_objectUpgradesCompleted.testForAll(upgradeT->getUpgradeMask());
 		m_objectUpgradesCompleted.set( upgradeT->getUpgradeMask() );
+		if (!wasComplete)
+		{
+			Player* player = getControllingPlayer();
+			if (player)
+			{
+				const std::vector<AsciiString>& sciencesToGrant = upgradeT->getSciencesToGrant();
+				for (std::vector<AsciiString>::const_iterator it = sciencesToGrant.begin(); it != sciencesToGrant.end(); ++it)
+					player->grantScience(TheScienceStore->getScienceFromInternalName(*it));
+			}
+		}
 
 		//
 		// iterate through all the upgrade modules of this object and call the method to

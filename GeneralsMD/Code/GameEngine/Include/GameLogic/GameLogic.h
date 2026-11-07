@@ -311,6 +311,9 @@ private:
 	bool onDoSpecialPower(GameMessage *msg, AIGroupPtr &currentlySelectedGroup);
 	bool onDoSpecialPowerAtLocation(GameMessage *msg, AIGroupPtr &currentlySelectedGroup);
 	bool onDoSpecialPowerAtObject(GameMessage *msg, AIGroupPtr &currentlySelectedGroup);
+	bool onDoDeploy(GameMessage* msg, AIGroupPtr& currentlySelectedGroup);
+	bool onDoDeployAtLocation(GameMessage* msg, AIGroupPtr& currentlySelectedGroup);
+	bool onDoUndeploy(GameMessage* msg, AIGroupPtr& currentlySelectedGroup);
 	bool onDoAttackmoveto(GameMessage *msg, AIGroupPtr &currentlySelectedGroup);
 	bool onDoForcemoveto(GameMessage *msg, AIGroupPtr &currentlySelectedGroup);
 	bool onDoMoveto(GameMessage *msg, AIGroupPtr &currentlySelectedGroup);

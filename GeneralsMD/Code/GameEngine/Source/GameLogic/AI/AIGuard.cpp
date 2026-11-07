@@ -454,21 +454,27 @@ StateReturnType AIGuardInnerState::update()
 			m_exitConditions.m_center = *targetToGuard->getPosition();
 		}
 
+		// TheSuperHackers @bugfix CookieLandProjects 31/07/2026 - This keeps deployed units from moving/undeploying immediately
+    // after killing a target if there are still more enemies available in the guard area.
+		// The original code would delete the attack state and create a new one, which would cause the unit to undeploy and move to the next target.
+#if RETAIL_COMPATIBLE_CRC
+		return m_attackState->update();
+#else
 		StateReturnType ret = m_attackState->update();
 
-		// If still running or sleeping, just propagate that.
 		if (ret == STATE_CONTINUE || IS_STATE_SLEEP(ret))
 			return ret;
 
-		// Attack sub-state finished (success or failure). Clean it up.
+		// Attack sub-state finished (success or failure).
+		// Clean it up.
 		m_attackState->onExit(EXIT_NORMAL);
 		deleteInstance(m_attackState);
 		m_attackState = nullptr;
 
-		// If attack finished successfully (target dead), check immediately for another inner target.
+		// If attack finished successfully (target died), check instantly for another enemy in guard range.
 		if (ret == STATE_SUCCESS)
 		{
-			// If we find another inner target, recreate the attack state and continue attacking
+			// If we find another enemy in guard range. Recreate the attack state and continue attacking.
 			if (getGuardMachine()->lookForInnerTarget())
 			{
 				Object* newTargetToGuard = getGuardMachine()->findTargetToGuardByID();
@@ -492,8 +498,9 @@ StateReturnType AIGuardInnerState::update()
 			}
 		}
 
-		// No new target found, propagate the attack state's result (success/failure).
+		// No new target found, state the attack states result (success/failure).
 		return ret;
+#endif
 	}
 	else if (m_enterState)
 	{
@@ -696,8 +703,9 @@ StateReturnType AIGuardReturnState::onEnter()
 		area->getCenterPoint(&m_goalPosition);
 	}
 
-	// If we're already essentially at the guard position, do not issue a move command.
-	// This prevents deployed units from undeploying/redeploying when nothing else remains.
+  // TheSuperHackers @bugfix CookieLandProjects 31/07/2026 - This keeps deployed units from moving/undeploying even though we are already
+  // at the guard position.
+#if !RETAIL_COMPATIBLE_CRC
 	Object* owner = getMachineOwner();
 	if (owner && owner->getPosition())
 	{
@@ -709,10 +717,11 @@ StateReturnType AIGuardReturnState::onEnter()
 		Real closeSqr = sqr(CLOSE_ENOUGH);
 		if (delta.lengthSqr() <= closeSqr)
 		{
-			// Already close enough; don't move.
+			// Already close enough so dont move.
 			return STATE_SUCCESS;
 		}
 	}
+#endif
 
 	AIUpdateInterface *ai = getMachineOwner()->getAIUpdateInterface();
 	if (ai && ai->isDoingGroundMovement())

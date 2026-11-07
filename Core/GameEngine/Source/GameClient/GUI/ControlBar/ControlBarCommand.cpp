@@ -1038,6 +1038,22 @@ CommandAvailability ControlBar::getCommandAvailability( const CommandButton *com
 		return COMMAND_HIDDEN;
 	}
 
+	AIUpdateInterface *aiCheck = obj->getAI();
+		if (aiCheck && aiCheck->isManualLockedDeploy())
+		{
+				GUICommandType ctype = command->getCommandType();
+				switch (ctype)
+				{
+						case GUI_COMMAND_SWITCH_WEAPON:
+						case GUI_COMMAND_DEPLOY_ON_LOCATION:
+						case GUI_COMMAND_UNDEPLOY:
+								break;
+
+						default:
+								return COMMAND_RESTRICTED;
+				}
+		}
+
 	//Unmanned vehicles don't have any commands available -- in fact they are hidden!
  	if( obj->isDisabledByType( DISABLED_UNMANNED ) )
  	{
@@ -1124,6 +1140,22 @@ CommandAvailability ControlBar::getCommandAvailability( const CommandButton *com
 
 	switch( command->getCommandType() )
 	{
+		case GUI_COMMAND_DEPLOY_ON_SPOT:
+		{
+			AIUpdateInterface *ai = obj->getAI();
+			if (ai && ai->isManualLockedDeploy())
+				return COMMAND_RESTRICTED;
+			return COMMAND_AVAILABLE;
+		}
+
+		case GUI_COMMAND_UNDEPLOY:
+		{
+			AIUpdateInterface *ai = obj->getAI();
+			if (ai && ai->isManualLockedDeploy())
+				return COMMAND_AVAILABLE;
+			return COMMAND_RESTRICTED;
+		}
+
 		case GUI_COMMAND_DOZER_CONSTRUCT:
 		{
       const ThingTemplate * whatToBuild = command->getThingTemplate();

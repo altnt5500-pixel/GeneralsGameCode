@@ -33,6 +33,12 @@
 #include "GameLogic/Module/UpdateModule.h"
 #include "GameLogic/Weapon.h"
 
+enum FireWeaponUpdateConditionType CPP_11(: Int)
+{
+	FIRE_WEAPON_UPDATE_CONDITION_NONE,
+	FIRE_WEAPON_UPDATE_CONDITION_DEPLOYED
+};
+
 //-------------------------------------------------------------------------------------------------
 class FireWeaponUpdateModuleData : public UpdateModuleData
 {
@@ -40,8 +46,10 @@ public:
 	const WeaponTemplate* m_weaponTemplate;
   UnsignedInt m_initialDelayFrames;
 	UnsignedInt m_exclusiveWeaponDelay;	///< If non-zero, any other weapon having fired this recently will keep us from doing anything
+	FireWeaponUpdateConditionType m_fireCondition;
 
 	FireWeaponUpdateModuleData();
+	static void parseFireCondition(INI* ini, void* instance, void* store, const void* userData);
 
 	static void buildFieldParse(MultiIniFieldParse& p);
 

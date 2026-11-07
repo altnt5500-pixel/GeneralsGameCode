@@ -546,6 +546,9 @@ public:
 		MSG_DO_SPECIAL_POWER,												///< do special
 		MSG_DO_SPECIAL_POWER_AT_LOCATION,						///< do special with target location
 		MSG_DO_SPECIAL_POWER_AT_OBJECT,							///< do special at with target object
+		MSG_DO_DEPLOY,													  	///< manual deploy for selected group
+		MSG_DO_DEPLOY_AT_LOCATION,									///< toggle manual deploy/undeploy at location
+    MSG_DO_UNDEPLOY,														///< manual undeploy for selected group
 		MSG_SET_RALLY_POINT,												///< (objectID, location)
 		MSG_PURCHASE_SCIENCE,												///< purchase a science
 		MSG_QUEUE_UPGRADE,													///< queue the "research" of an upgrade

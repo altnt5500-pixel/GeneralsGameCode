@@ -50,6 +50,13 @@ enum DamageType CPP_11(: Int);
 // for WeaponSetFlags. Part of detangling.
 #include "GameLogic/WeaponSetFlags.h"
 
+enum WeaponSetFireConditionType CPP_11(: Int)
+{
+	WEAPONSET_FIRE_CONDITION_NONE = 0,
+	WEAPONSET_FIRE_CONDITION_RADAR_SYSTEM,
+	WEAPONSET_FIRE_CONDITION_COUNT
+};
+
 #ifdef DEFINE_WEAPONSLOTTYPE_NAMES
 static const char *const TheWeaponSlotTypeNames[] =
 {
@@ -129,6 +136,7 @@ class WeaponTemplateSet
 private:
 	const ThingTemplate*		m_thingTemplate;	// needed for save/load
 	WeaponSetFlags					m_types;
+	WeaponSetFireConditionType m_fireCondition;
 	const WeaponTemplate*		m_template[WEAPONSLOT_COUNT];
 	UnsignedInt							m_autoChooseMask[WEAPONSLOT_COUNT];
 	KindOfMaskType					m_preferredAgainst[WEAPONSLOT_COUNT];
@@ -138,6 +146,7 @@ private:
 	static void parseWeapon(INI* ini, void *instance, void *store, const void* userData);
 	static void parseAutoChoose(INI* ini, void *instance, void *store, const void* userData);
 	static void parsePreferredAgainst(INI* ini, void *instance, void *store, const void* userData);
+	static void parseFireConditions(INI* ini, void *instance, void *store, const void* userData);
 
 public:
 	inline WeaponTemplateSet()
@@ -153,6 +162,7 @@ public:
 	Bool testWeaponSetFlag( WeaponSetType wst ) const;
 	Bool isSharedReloadTime() const { return m_isReloadTimeShared; }
 	Bool isWeaponLockSharedAcrossSets() const {return m_isWeaponLockSharedAcrossSets; }
+	WeaponSetFireConditionType getFireCondition() const { return m_fireCondition; }
 
 	Bool hasAnyWeapons() const;
 	inline const WeaponTemplate* getNth(WeaponSlotType n) const { return m_template[n]; }
@@ -241,6 +251,7 @@ public:
 	Bool setWeaponLock( WeaponSlotType weaponSlot, WeaponLockType lockType );
 	void releaseWeaponLock(WeaponLockType lockType);
 	Bool isSharedReloadTime() const;
+	Bool canFireWeapon(const Weapon *weapon, const Object *obj) const;
 
 	//When an AIAttackState is over, it needs to clean up any weapons that might be in leech range mode
 	//or else those weapons will have unlimited range!
